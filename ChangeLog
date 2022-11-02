@@ -1,0 +1,17 @@
+1.1.2
+
+- ensure that env_path is resolved before updating $PWD
+
+1.1.1
+
+- updated $PWD/$CWD handling again, set these rather than setdefault to override possible
+  values from the shell to provide more consistent results
+
+1.1.0
+
+- updated implied $PWD handling:
+    - $CWD is setdefault for the process current directory (this was previously $PWD)
+    - $PWD is setdefault for the directory containing the .env file
+- errors: bool arg load_env and friends, defaults to False
+    - if errors=True, FileNotFoundError is raised when no usable .env ($DOTENV) file is found
+
