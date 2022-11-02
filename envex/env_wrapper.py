@@ -22,7 +22,7 @@ class Env:
         return os.environ
 
     def __init__(self, *args, environ: MutableMapping[str, str] = None, exception=None, readenv=False, **kwargs):
-        self.__typemap = {
+        self._typemap = {
             str: self.get,
             int: self.int,
             bool: self.bool,
