@@ -71,7 +71,7 @@ class Env:
         if default is not None and not self.is_set(var):
             self.set(var, default)
         try:
-            return self.__typemap[type](var, default=default)
+            return self._typemap[type](var, default=default)
         except KeyError:
             pass
         return self.get(var, default)
