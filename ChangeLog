@@ -1,3 +1,8 @@
+1.5.0
+
+- handle "export" in .env files correctly - pass to os.environ if "export" is used
+- also allow for other (as yet unimplemented) special commands or key=val prefixes
+
 1.1.2
 
 - ensure that env_path is resolved before updating $PWD

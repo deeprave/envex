@@ -23,7 +23,7 @@ def dotenv(ignored):
 # This is an example .env file
 SECOND=a-second-value
 THIRD=altnernative-third
-FIFTH=fifth-value
+export FIFTH=fifth-value
 COMBINED=${FIRST}:${THIRD}:${FIFTH}
 DOUBLE_QUOTED="a quoted value"
 SINGLE_QUOTED='a quoted value'

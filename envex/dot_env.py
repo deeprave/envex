@@ -21,6 +21,19 @@ def unquote(line, quotes='"\''):
     return line
 
 
+def _env_default(environ: MutableMapping[str, str], key: str, val: str, overwrite: bool=False):
+    if key and val:
+        if overwrite or key not in environ:
+            environ[key] = val
+
+
+def _env_export(environ: MutableMapping[str, str], key: str, val: str, overwrite: bool=False):
+    if key and val:
+        if overwrite or key not in environ:
+            environ[key] = val
+            os.environ[key] = val
+
+
 def _env_files(env_file: str, search_path: List[Path], parents: bool, errors: bool) -> List[str]:
     """ expand env_file with full search path, optionally parents as well """
 
@@ -58,6 +71,11 @@ def open_env(path: Union[str, Path]):
             fp.close()
 
 
+ENV_COMMANDS = {
+    'export': _env_export,
+}
+
+
 def _process_env(env_file: str, search_path: List[Path], environ: MutableMapping[str, str], overwrite: bool,
                  parents: bool, errors: bool) -> MutableMapping[str, str]:
     """ search for any env_files in given dir list and populate environ dict
@@ -68,13 +86,24 @@ def _process_env(env_file: str, search_path: List[Path], environ: MutableMapping
     :param parents:
     """
 
-    def process_line(string):
+    def process_line(env_path: Path, lineno: int, string: str):
         """ process a single line """
+        func, key, val = _env_default, None, None
         parts = string.split('=', 1)
         if len(parts) == 2:
             key, val = parts
-            if overwrite or key not in environ:
-                environ[key] = unquote(val)
+        elif len(parts) == 1:
+            key = parts[0]
+        if key:
+            words = key.split(maxsplit=1)
+            if len(words) > 1:
+                command, key = words
+                try:
+                    func = ENV_COMMANDS[command]
+                except KeyError:
+                    if errors:
+                        print(f"unknown command {command} {env_path.as_posix()}({lineno})", file=sys.stderr)
+        return func, unquote(key), unquote(val)
 
     for env_path in _env_files(env_file, search_path, parents, errors):
         # insert PWD as container of env file
@@ -82,10 +111,14 @@ def _process_env(env_file: str, search_path: List[Path], environ: MutableMapping
         environ['PWD'] = str(env_path.parent)
         try:
             with open_env(env_path) as f:
+                lineno = 0
                 for line in f.readlines():
                     line = line.strip()
+                    lineno += 1
                     if line and line[0] != '#':
-                        process_line(line)
+                        func, key, val = process_line(env_path, lineno, line)
+                        if func is not None:
+                            func(environ, key, val, overwrite=overwrite)
         except FileNotFoundError:
             if errors:
                 raise
