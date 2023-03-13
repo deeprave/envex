@@ -300,3 +300,5 @@ Session.vim
 .pytest_cache/
 .ipython/
 .env
+
+requirements.txt
