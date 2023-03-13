@@ -117,16 +117,25 @@ class Env:
         return val if isinstance(val, (list, tuple)) else self._list(val)
 
     def export(self, *args, **kwargs):
+        import os
+
         for arg in args:
             if not isinstance(arg, (dict,)):
                 raise TypeError('export() requires either dictionaries or keyword=value pairs')
-            self.export(**arg)
+            kwargs |= {k: v for k, v in arg.items()}
+        if not args and not kwargs:
+            kwargs = self._env
         for k, v in kwargs.items():
-            if v is None:
-                self.unset(k)
-            else:
-                self.set(k, v)
-
+            k = str(k)
+            try:
+                if v is None:
+                    self.unset(k)
+                    del os.environ[k]
+                else:
+                    self.set(k, v)
+                    os.environ[k] = str(v)
+            except KeyError:
+                ...
     @classmethod
     def _true_values(cls, val):
         return cls._BOOLEAN_TRUE_STRINGS if isinstance(val, str) else cls._BOOLEAN_TRUE_BYTES

@@ -163,6 +163,12 @@ def test_env_export():
     env.export({k: None for k in values.keys()})
     assert not env.is_any_set([k for k in values.keys()])
 
+    import os
+
+    env.export(**values)
+    for k, v in values.items():
+        assert os.environ[k] == str(v)
+
 
 def test_env_contains(monkeypatch):
     monkeypatch.setattr(envex.dot_env, 'open_env', dotenv)
