@@ -47,16 +47,16 @@ It can read this either from `__init__` or via the method `read_env()`.
 * Override the base name of the dot env file, use the `DOTENV` environment variable.
 * Other kwargs that can be passed to `Env.__init__`
 
+  * environ (env): pass the environment to update, default is os.environ
   * env_file (str): base name of the env file, os.environ["DOTENV"] by default, or .env
   * search_path (str or list): a single path or list of paths to search for the env file
+  * readenv (bool): search for and read .env files
   * overwrite (bool): overwrite already set values read from .env, default is to only set if not currently set
   * parents (bool): search (or not) parents of dirs in the search_path
   * update (bool): update os.environ if true (default) otherwise pool changes internally
-  * environ (env): pass the environment to update, default is os.environ
+  * working_dirs (bool): add CWD for the current process and PWD of source .env file
 
-* Env() also takes an additional kwarg, `readenv` (default False) which instructs it to read dotenv files
-
-
+In addition, the search_path may also be a colon (or simicolon on Windows) separated list of directories to search.
 
 Some type-smart functions act as an alternative to `Env.get` and having to
 parse the result:

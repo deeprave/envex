@@ -1,15 +1,8 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
+[tool.poetry]
 name = "envex"
-version = "1.5.1"
+version = "1.5.2"
 description = "An extended and convenient os.environ interface"
-requires-python = ">=3.9"
-authors = [
-    {name = "David Nugent", email = "davidn@uniquode.io"}
-]
+authors = ["David Nugent <davidn@uniquode.io>"]
 readme = "README.md"
 license = "MIT"
 classifiers = [
@@ -17,5 +10,23 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 
-[project.optional-dependencies]
-dev = ["pytest>=7.0"]
+[tool.poetry.dependencies]
+python = ">= 3.10"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.7.0"
+isort = "^5.12.0"
+ruff = "^0.0.285"
+pre-commit = "^3.3.3"
+
+[tool.poetry.group.test.dependencies]
+pytest = ">=7.0"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
