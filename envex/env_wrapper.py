@@ -4,7 +4,7 @@ Wrapper around os.environ
 """
 import re
 from typing import Any, MutableMapping
-from urllib.parse import urlparse, urlunparse, parse_qs, unquote_plus
+
 from .dot_env import load_env, unquote
 
 
@@ -12,24 +12,26 @@ class Env:
     """
     Wrapper around os.environ with .env enhancement` and django support
     """
-    _BOOLEAN_TRUE_STRINGS = ('T', 't', '1', 'on', 'ok', 'Y', 'y', 'en')
-    _BOOLEAN_TRUE_BYTES = (s.encode('utf-8') for s in _BOOLEAN_TRUE_STRINGS)
+
+    _BOOLEAN_TRUE_STRINGS = ("T", "t", "1", "on", "ok", "Y", "y", "en")
+    _BOOLEAN_TRUE_BYTES = (s.encode("utf-8") for s in _BOOLEAN_TRUE_STRINGS)
     _EXCEPTION_CLS = KeyError
 
     @staticmethod
     def os_env():
         import os
+
         return os.environ
 
-    def __init__(self, *args, environ: MutableMapping[str, str] = None, exception=None, readenv=False, **kwargs):
-        self._typemap = {
-            str: self.get,
-            int: self.int,
-            bool: self.bool,
-            float: self.float,
-            list: self.list,
-        }
-        self._env = environ or self.os_env()
+    def __init__(
+        self,
+        *args,
+        environ: MutableMapping[str, str] = None,
+        exception=None,
+        readenv=False,
+        **kwargs,
+    ):
+        self._env = self.os_env() if environ is None else environ
         self._env.update(args)
         if readenv:
             self.read_env(**kwargs)
@@ -45,9 +47,10 @@ class Env:
             overwrite: bool
             parents: bool
             update: bool
-        :   MutableMapping[str, str]
+            errors: bool
+        : MutableMapping[str, str]
         """
-        kwargs.setdefault('environ', self._env)
+        kwargs.setdefault("environ", self._env)
         self._env = load_env(**kwargs)
 
     @property
@@ -57,7 +60,7 @@ class Env:
     @exception.setter
     def exception(self, exc):
         if not issubclass(exc, Exception):
-            raise ValueError(f'arg {exc} is not an exception class')
+            raise ValueError(f"arg {exc} is not an exception class")
         self._exception = exc
 
     @property
@@ -66,15 +69,6 @@ class Env:
 
     def get(self, var, default=None):
         return self.env.get(var, default)
-
-    def __call__(self, var, default=None, type=str):
-        if default is not None and not self.is_set(var):
-            self.set(var, default)
-        try:
-            return self._typemap[type](var, default=default)
-        except KeyError:
-            pass
-        return self.get(var, default)
 
     def pop(self, var, default=None):
         val = self.get(var, default)
@@ -116,12 +110,33 @@ class Env:
         val = self.get(var, default)
         return val if isinstance(val, (list, tuple)) else self._list(val)
 
+    __typemap = {
+        "str": get,
+        "int": int,
+        "bool": bool,
+        "float": float,
+        "list": list,
+    }
+
+    # noinspection PyShadowingBuiltins
+    def __call__(self, var, default=None, **kwargs):
+        if default is not None and not self.is_set(var):
+            self.set(var, default)
+        _type = kwargs.get("type", str)
+        _type = _type if isinstance(_type, str) else _type.__name__
+        try:
+            func = self.__typemap[_type]
+            return func(self, var, default=default)
+        except KeyError:
+            pass
+        return self.get(var, default)
+
     def export(self, *args, **kwargs):
         import os
 
         for arg in args:
             if not isinstance(arg, (dict,)):
-                raise TypeError('export() requires either dictionaries or keyword=value pairs')
+                raise TypeError("export() requires either dictionaries or keyword=value pairs")
             kwargs |= {k: v for k, v in arg.items()}
         if not args and not kwargs:
             kwargs = self._env
@@ -136,13 +151,14 @@ class Env:
                     os.environ[k] = str(v)
             except KeyError:
                 ...
+
     @classmethod
     def _true_values(cls, val):
         return cls._BOOLEAN_TRUE_STRINGS if isinstance(val, str) else cls._BOOLEAN_TRUE_BYTES
 
     @classmethod
     def is_true(cls, val):
-        if val in (None, False, '', 0, '0'):
+        if val in (None, False, "", 0, "0"):
             return False
         if not isinstance(val, (str, bytes)):
             return bool(val)
@@ -159,7 +175,7 @@ class Env:
 
     @classmethod
     def _list(cls, val):
-        return [] if val is None else [unquote(part) for part in re.split(r'\s*,\s*', str(val))]
+        return [] if val is None else [unquote(part) for part in re.split(r"\s*,\s*", str(val))]
 
     def __contains__(self, var):
         return str(var) in self.env
@@ -188,7 +204,8 @@ class Env:
         else:
             url = self.get(var, default=default) if var else default
             if not url and raise_error:
-                raise self.exception(f'Expected {var} is not set in environment')
-        return '' if url is None else url
+                raise self.exception(f"Expected {var} is not set in environment")
+        return "" if url is None else url
+
 
 env = Env()
