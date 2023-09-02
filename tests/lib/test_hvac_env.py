@@ -1,29 +1,21 @@
 # -*- coding: utf-8 -*-
 import os
 import pytest
-import unittest
 
 from envex.lib.hvac_env import SecretsManager
 
 
-class TestSecretsManager(unittest.TestCase):
+class TestSecretsManager:
     url = os.getenv("VAULT_ADDR")
     token = os.getenv("VAULT_TOKEN")
 
-    skip_hvac = True
+    @staticmethod
+    def checkSecretsManager(url, token) -> bool:
+        sm = SecretsManager(url, token, base_path="test")
+        # skip tests unless hvac is available
+        return sm.client is not None
 
-    try:
-        import hvac
-
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            sm = SecretsManager(self.url, self.token, base_path="test")
-            self.__class__.skip_hvac = sm.client is None
-
-    except ImportError:
-        hvac = None
-
-    # skip tests unless hvac is available
+    skip_hvac = not checkSecretsManager(url, token)
 
     #  Tests that the get_secret method retrieves a secret from the cache if it exists
     @pytest.mark.skipif(skip_hvac, reason="hvac is not functional")
