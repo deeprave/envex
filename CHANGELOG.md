@@ -1,5 +1,18 @@
 # ChangeLog
 
+### v2.0.0
+
+- Support for Hashicorp vault via a secrets manager
+    - install optional "hvac" dependency to enable, else no-op
+    - read hvac documentation for usage (eg VAULT_TOKEN and VAULT_ADDR)
+    - by default, environment values override vault ones. To modify this
+      behaviour, set ENVEX_SRC=vault to have vault values override.
+      ENVEX_SRC=env by default.
+    - args to Env() added to support vault client configuration
+    - vault secrets are cached by default
+    - base_path arg may be used to set a based vault path, i.e. f"/secret/{base_path}/key",
+      allowing specific secrets to be used for different environments and roles 
+
 ### v1.6.0
 
 - revert to poetry for project management (.lock file used by dependabot)

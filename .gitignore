@@ -57,8 +57,8 @@ coverage.xml
 venv/
 ENV/
 
-# mypy
-.mypy_cache/
+# mypy, pytest, ruff
+.*_cache/
 
 
 ### Node template
@@ -297,7 +297,6 @@ Session.vim
 ### Project specific
 
 /html/media/
-.pytest_cache/
 .ipython/
 .env
 
