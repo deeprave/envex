@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+
 import pytest
 
 from envex.lib.hvac_env import SecretsManager
@@ -67,9 +68,7 @@ class TestSecretsManager:
         secrets_manager.set_secret("key", "secret_value")
 
         # Assert that the secret is set in the Vault
-        secrets_manager._client.write.assert_called_once_with(
-            "/secret/test/key", value="secret_value"
-        )
+        secrets_manager._client.write.assert_called_once_with("/secret/test/key", value="secret_value")
 
         # Assert that the secret is cached
         secrets_manager._cache.put.assert_called_once_with("key", "secret_value")

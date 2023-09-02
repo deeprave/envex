@@ -3,7 +3,7 @@
 Type smart wrapper around os.environ
 """
 import re
-from typing import Any, MutableMapping, List, Type
+from typing import Any, List, MutableMapping, Type
 
 from .dot_env import load_env, unquote
 from .lib.hvac_env import SecretsManager
@@ -194,9 +194,7 @@ class Env:
 
         for arg in args:
             if not isinstance(arg, (dict,)):
-                raise TypeError(
-                    "export() requires either dictionaries or keyword=value pairs"
-                )
+                raise TypeError("export() requires either dictionaries or keyword=value pairs")
             kwargs |= {k: v for k, v in arg.items()}
         if not args and not kwargs:
             kwargs = self.env
@@ -214,11 +212,7 @@ class Env:
 
     @classmethod
     def _true_values(cls, val):
-        return (
-            cls._BOOLEAN_TRUE_STRINGS
-            if isinstance(val, str)
-            else cls._BOOLEAN_TRUE_BYTES
-        )
+        return cls._BOOLEAN_TRUE_STRINGS if isinstance(val, str) else cls._BOOLEAN_TRUE_BYTES
 
     @classmethod
     def is_true(cls, val):
@@ -231,9 +225,7 @@ class Env:
 
     @classmethod
     def _int(cls, val):
-        return (
-            val if isinstance(val, int) else int(val) if val and str.isdigit(val) else 0
-        )
+        return val if isinstance(val, int) else int(val) if val and str.isdigit(val) else 0
 
     @classmethod
     def _float(cls, val):
@@ -241,11 +233,7 @@ class Env:
 
     @classmethod
     def _list(cls, val):
-        return (
-            []
-            if val is None
-            else [unquote(part) for part in re.split(r"\s*,\s*", str(val))]
-        )
+        return [] if val is None else [unquote(part) for part in re.split(r"\s*,\s*", str(val))]
 
     def __contains__(self, var):
         return self.get(var, None) is not None

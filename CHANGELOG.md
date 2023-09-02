@@ -11,7 +11,7 @@
     - args to Env() added to support vault client configuration
     - vault secrets are cached by default
     - base_path arg may be used to set a based vault path, i.e. f"/secret/{base_path}/key",
-      allowing specific secrets to be used for different environments and roles 
+      allowing specific secrets to be used for different environments and roles
 
 ### v1.6.0
 

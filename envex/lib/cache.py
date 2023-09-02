@@ -25,9 +25,7 @@ class StringCacheType:
     def clear(self):
         raise NotImplementedError("clear must be implemented")
 
-    def get(
-        self, key: str, default: str | None = None, error: bool = False
-    ) -> str | None:
+    def get(self, key: str, default: str | None = None, error: bool = False) -> str | None:
         value = self.pop(key, default)
         if value is not None:
             self.push(key, value)
