@@ -33,6 +33,23 @@ def test_env_wrapper():
     assert "USER" in env
 
 
+def test_env_get():
+    env = envex.Env(environ={})
+    var, val = "MY_VARIABLE", "MY_VARIABLE_VALUE"
+    assert var not in env
+    value = env.get(var)
+    assert value is None
+    value = env.get(var, val)
+    assert value == val
+    assert var not in env
+    with pytest.raises(KeyError):
+        _ = env[var]
+    env[var] = val
+    val = env.pop(var)
+    assert value == val
+    assert var not in env
+
+
 def test_env_call():
     env = envex.Env()
     var, val = "MY_VARIABLE", "MY_VARIABLE_VALUE"
@@ -43,6 +60,8 @@ def test_env_call():
     assert value == val
     assert var in env
     assert env[var] == val
+    value = env(var, type="notdefined")
+    assert value == val
 
 
 def test_env_int(monkeypatch):
@@ -143,31 +162,40 @@ def test_env_exception():
 
 
 def test_env_export():
-    env = envex.Env()
+    env = envex.Env(environ={})
     assert "MYVARIABLE" not in env
     env.export(MYVARIABLE="somevalue")
     assert env["MYVARIABLE"] == "somevalue"
     env.export(MYVARIABLE=None)
     with pytest.raises(KeyError):
         _ = env["MYVARIABLE"]
+    with pytest.raises(TypeError):
+        _ = env.export("NOT_MYVARIABLE")
+    env.export(NOT_MYVARIABLE=None)
 
     values = dict(MYVARIABLE="somevalue", MYVARIABLE2=1, MYVARIABLE3="...")
 
     env.export(values)
     for k, v in values.items():
         assert env[k] == str(v)
+    assert env.is_all_set([k for k in values.keys()])
+    assert not env.is_all_set("NOTSETVAR")
     env.export({k: None for k in values.keys()})
     assert not env.is_any_set([k for k in values.keys()])
+    env["NOT_MYVARIABLE"] = "somevalue"
+    assert env.is_any_set("NOT_MYVARIABLE")
 
     env.export(**values)
     for k, v in values.items():
         assert env[k] == str(v)
+    assert env.is_all_set([k for k in values.keys()])
     env.export({k: None for k in values.keys()})
     assert not env.is_any_set([k for k in values.keys()])
 
     import os
 
-    env.export(**values)
+    env.set(values)
+    env.export()
     for k, v in values.items():
         assert os.environ[k] == str(v)
 
@@ -179,8 +207,52 @@ def test_env_contains(monkeypatch):
     env.read_env()
 
     assert "DATABASE_URL" in env
-    assert env["DATABASE_URL"] == "postgresql://username:password@localhost/database_name"
+    assert (
+        env["DATABASE_URL"] == "postgresql://username:password@localhost/database_name"
+    )
     assert "CACHE_URL" in env
     assert env["CACHE_URL"] == "memcache://localhost:11211"
     assert "REDIS_URL" in env
     assert env["REDIS_URL"] == "redis://localhost:6379/5"
+
+    del env["DATABASE_URL"]
+    assert "DATABASE_URL" not in env
+
+
+def test_check_var(monkeypatch):
+    monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
+    env = envex.Env()
+    env.read_env()
+
+    assert env.check_var("DATABASE_URL") != ""
+    pytest.raises(KeyError, env.check_var, "UNDEFINEDVARIABLE")
+    assert env.check_var(None) == ""
+
+
+def test_setdefault_non_none():
+    env = envex.Env(environ={})
+    # Test when value is not None
+    result = env.setdefault("var1", 123)
+    assert result == "123"
+    assert env.env["var1"] == "123"
+    env.setdefault("var1", 543)
+    assert env.env["var1"] == "123"
+
+
+def test_setdefault_none():
+    env = envex.Env(environ={})
+    # Test when value is None
+    result = env.setdefault("var2", None)
+    assert result is None
+    assert env.env["var2"] is None
+    env.setdefault("var2", 543)
+    assert env.env["var2"] is None
+
+
+def test_setdefault_exists():
+    env = envex.Env(environ={})
+    # Test when variable already exists
+    env.env["var3"] = "abc"
+    result = env.setdefault("var3", "def")
+    assert result == "abc"
+    assert env.env["var3"] == "abc"

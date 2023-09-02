@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Wrapper around os.environ
+Type smart wrapper around os.environ
 """
 import re
-from typing import Any, MutableMapping
+from typing import Any, MutableMapping, List, Type
 
 from .dot_env import load_env, unquote
+from .lib.hvac_env import SecretsManager
 
 
 class Env:
@@ -13,31 +14,69 @@ class Env:
     Wrapper around os.environ with .env enhancement` and django support
     """
 
+    _exception: Type[Exception]
+
     _BOOLEAN_TRUE_STRINGS = ("T", "t", "1", "on", "ok", "Y", "y", "en")
     _BOOLEAN_TRUE_BYTES = (s.encode("utf-8") for s in _BOOLEAN_TRUE_STRINGS)
     _EXCEPTION_CLS = KeyError
+
+    def __init__(
+        self,
+        *args,
+        environ: MutableMapping[str, str] = None,
+        exception: Type[Exception] | None = None,
+        readenv: bool = False,
+        url: str = None,
+        token: str = None,
+        cert=None,
+        verify: bool = True,
+        cache_enabled: bool = True,
+        base_path: str = None,
+        **kwargs,
+    ):
+        """
+
+        @param args: dict (optional) environment variables
+        @param environ: dict | None default base environment (os.environ is default)
+        @param exception: (optional) Exception class to raise on error (default=KeyError)
+        @param readenv: read values from .env files (default=False)
+            if true, the following additional args are accepted:
+            @param env_file: str name of the environment file (.env or $ENV default)
+            search_path: None | Union[List[str], List[Path]], str] path(s) to search for env_file
+            overwrite: bool whether to overwrite existing environment variables (default=False)
+            parents: bool whether to search parent directories for env_file (default=False)
+            update: bool whether to update os.environ with values from env_file (default=False)
+            errors: bool whether to raise error on missing env_file (default=False)
+        @param url: (optional) vault url, default is $VAULT_ADDR
+        @param token: (optional) vault token, default is $VAULT_TOKEN or ~/.vault-token
+        @param cert: (optional) tuple (cert, key) or str path to client cert/key files
+        @param verify: (optional) bool whether to verify server cert (default=True)
+        @param cache_enabled: (optional) bool whether to cache secrets (default=True)
+        @param base_path: (optional) str base path, or "environment" for secrets (default=None)
+        @param kwargs: (optional) environment variables to add/override
+        """
+        self._env = self.os_env() if environ is None else environ
+        self._env.update(args)
+        if readenv:
+            self.read_env(**kwargs)
+        else:
+            self._env.update({k: v for k, v in kwargs.items() if isinstance(v, str)})
+        self.env_source = self.env.get("ENVEX_SOURCE", "env") == "env"
+        self.secret_manager = SecretsManager(
+            url=url,
+            token=token,
+            cert=cert,
+            verify=verify,
+            cache_enabled=cache_enabled,
+            base_path=base_path,
+        )
+        self.exception = exception or self._EXCEPTION_CLS
 
     @staticmethod
     def os_env():
         import os
 
         return os.environ
-
-    def __init__(
-        self,
-        *args,
-        environ: MutableMapping[str, str] = None,
-        exception=None,
-        readenv=False,
-        **kwargs,
-    ):
-        self._env = self.os_env() if environ is None else environ
-        self._env.update(args)
-        if readenv:
-            self.read_env(**kwargs)
-        else:
-            self._env.update(kwargs)
-        self.exception = exception or self._EXCEPTION_CLS
 
     def read_env(self, **kwargs):
         """
@@ -48,53 +87,72 @@ class Env:
             parents: bool
             update: bool
             errors: bool
-        : MutableMapping[str, str]
+        kwargs: MutableMapping[str, str]
         """
         kwargs.setdefault("environ", self._env)
         self._env = load_env(**kwargs)
 
     @property
-    def exception(self):
+    def exception(self) -> Type[Exception]:
         return self._exception
 
     @exception.setter
-    def exception(self, exc):
-        if not issubclass(exc, Exception):
-            raise ValueError(f"arg {exc} is not an exception class")
+    def exception(self, exc: Type[Exception]):
         self._exception = exc
 
     @property
     def env(self):
         return self._env
 
-    def get(self, var, default=None):
-        return self.env.get(var, default)
+    def get(self, var: str, default=None):
+        # getting from environment is cheapest
+        value = self.env.get(var, None)
+        # not set or isn't primary, check secrets manager
+        if value is None or not self.env_source:
+            sm_value = self.secret_manager.get_secret(var, None)
+            if sm_value is not None:
+                value = sm_value
+        return default if value is None else value
 
     def pop(self, var, default=None):
         val = self.get(var, default)
         self.unset(var)
         return val
 
-    def set(self, var, value=None):
-        self.env[var] = str(value) if value is not None else value
+    def set(self, var: str | dict, value=None):
+        if isinstance(var, dict):
+            for k, v in var.items():
+                self.set(k, v)
+        else:
+            self.env[var] = str(value) if value is not None else value
 
-    def setdefault(self, var, value):
+    def setdefault(self, var, value) -> str | None:
         return self.env.setdefault(var, str(value) if value is not None else value)
 
     def unset(self, var):
         if var in self.env:
-            del self._env[var]
+            del self.env[var]
 
     def is_set(self, var):
         return var in self
 
-    def is_all_set(self, *_vars):
-        return all(v in self for v in _vars)
+    def is_all_set(self, *_vars: str | List[str | list | tuple]):
+        for v in _vars:
+            if isinstance(v, (list, tuple)):
+                return self.is_all_set(*v)
+            if not self.is_set(v):
+                return False
+        return True
 
-    def is_any_set(self, *_vars):
-        return any(v in self for v in _vars)
+    def is_any_set(self, *_vars: str | List[str | list | tuple]):
+        for v in _vars:
+            if isinstance(v, (list, tuple)):
+                return self.is_any_set(*v)
+            if self.is_set(v):
+                return True
+        return False
 
-    def int(self, var, default=None) -> int:
+    def int(self, var, default: int | None = None) -> int:
         val = self.get(var, default)
         return self._int(val)
 
@@ -136,10 +194,12 @@ class Env:
 
         for arg in args:
             if not isinstance(arg, (dict,)):
-                raise TypeError("export() requires either dictionaries or keyword=value pairs")
+                raise TypeError(
+                    "export() requires either dictionaries or keyword=value pairs"
+                )
             kwargs |= {k: v for k, v in arg.items()}
         if not args and not kwargs:
-            kwargs = self._env
+            kwargs = self.env
         for k, v in kwargs.items():
             k = str(k)
             try:
@@ -154,7 +214,11 @@ class Env:
 
     @classmethod
     def _true_values(cls, val):
-        return cls._BOOLEAN_TRUE_STRINGS if isinstance(val, str) else cls._BOOLEAN_TRUE_BYTES
+        return (
+            cls._BOOLEAN_TRUE_STRINGS
+            if isinstance(val, str)
+            else cls._BOOLEAN_TRUE_BYTES
+        )
 
     @classmethod
     def is_true(cls, val):
@@ -167,7 +231,9 @@ class Env:
 
     @classmethod
     def _int(cls, val):
-        return val if isinstance(val, int) else int(val) if val and str.isdigit(val) else 0
+        return (
+            val if isinstance(val, int) else int(val) if val and str.isdigit(val) else 0
+        )
 
     @classmethod
     def _float(cls, val):
@@ -175,10 +241,14 @@ class Env:
 
     @classmethod
     def _list(cls, val):
-        return [] if val is None else [unquote(part) for part in re.split(r"\s*,\s*", str(val))]
+        return (
+            []
+            if val is None
+            else [unquote(part) for part in re.split(r"\s*,\s*", str(val))]
+        )
 
     def __contains__(self, var):
-        return str(var) in self.env
+        return self.get(var, None) is not None
 
     def __setitem__(self, var: str, value: Any):
         self.set(var, value)
@@ -204,7 +274,7 @@ class Env:
         else:
             url = self.get(var, default=default) if var else default
             if not url and raise_error:
-                raise self.exception(f"Expected {var} is not set in environment")
+                raise self._exception(f"Expected {var} is not set in environment")
         return "" if url is None else url
 
 
