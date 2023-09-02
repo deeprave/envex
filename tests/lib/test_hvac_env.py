@@ -4,12 +4,18 @@ import pytest
 
 from envex.lib.hvac_env import SecretsManager
 
+try:
+    import hvac
+except ImportError:
+    hvac = None
+
 
 class TestSecretsManager:
     url = os.getenv("VAULT_ADDR")
     token = os.getenv("VAULT_TOKEN")
 
     #  Tests that the get_secret method retrieves a secret from the cache if it exists
+    @pytest.mark.skipif(hvac is None, reason="hvac is not installed")
     def test_get_secret_from_cache(self, mocker):
         # Create a SecretsManager instance
         secrets_manager = SecretsManager(self.url, self.token, base_path="test")
@@ -25,6 +31,7 @@ class TestSecretsManager:
         assert result == "secret_value"
 
     #  Tests that the get_secret method retrieves a secret from Vault if it is not in the cache
+    @pytest.mark.skipif(hvac is None, reason="hvac is not installed")
     def test_get_secret_from_vault(self, mocker):
         # Create a SecretsManager instance
         secrets_manager = SecretsManager(self.url, self.token, base_path="test")
@@ -44,6 +51,7 @@ class TestSecretsManager:
         assert result == "secret_value"
 
     #  Tests that the set_secret method sets a secret in Vault and caches it
+    @pytest.mark.skipif(hvac is None, reason="hvac is not installed")
     def test_set_secret_in_vault(self, mocker):
         # Create a SecretsManager instance
         secrets_manager = SecretsManager(self.url, self.token, base_path="test")
@@ -64,6 +72,7 @@ class TestSecretsManager:
         secrets_manager._cache.put.assert_called_once_with("key", "secret_value")
 
     #  Tests that the seal method seals the Vault
+    @pytest.mark.skipif(hvac is None, reason="hvac is not installed")
     def test_seal_vault(self, mocker):
         # Create a SecretsManager instance
         secrets_manager = SecretsManager(self.url, self.token, base_path="test")
@@ -79,6 +88,7 @@ class TestSecretsManager:
         assert result is True
 
     #  Tests that the unseal_vault method unseals the Vault with valid keys and root token
+    @pytest.mark.skipif(hvac is None, reason="hvac is not installed")
     def test_unseal_vault(self, mocker):
         # Create a SecretsManager instance
         secrets_manager = SecretsManager(self.url, self.token, base_path="test")
@@ -94,6 +104,7 @@ class TestSecretsManager:
         assert result is True
 
     #  Tests that the unseal_vault method does not unseal the Vault with invalid keys or root token
+    @pytest.mark.skipif(hvac is None, reason="hvac is not installed")
     def test_unseal_vault_invalid_keys(self, mocker):
         # Create a SecretsManager instance
         secrets_manager = SecretsManager(self.url, self.token, base_path="test")
