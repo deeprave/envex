@@ -40,14 +40,11 @@ class SecretsManager:
         """
         try:
             import hvac
-            import requests
 
-            self._client = hvac.Client(
-                url=url, token=token, cert=cert, verify=verify, **kwargs
-            )
+            self._client = hvac.Client(url=url, token=token, cert=cert, verify=verify, **kwargs)
             self._base_path = f"/secret/{base_path}" if base_path else "/secrets"
         except ImportError:
-            requests = hvac = None
+            hvac = None
             self._client = None
             self._base_path = f"/secret/{base_path}" if base_path else "/secrets"
         self._cache = new_string_cache(64 if cache_enabled else 0)
@@ -59,9 +56,7 @@ class SecretsManager:
             if self._client.is_authenticated():
                 return self._client
         except Exception as exc:
-            logging.debug(
-                f"{exc.__class__.__name__} Vault client cannot authenticate {exc}"
-            )
+            logging.debug(f"{exc.__class__.__name__} Vault client cannot authenticate {exc}")
 
     @property
     def base_path(self) -> str:
@@ -89,9 +84,7 @@ class SecretsManager:
                 return secret
 
             # Retrieve the secret from Hashicorp Vault
-            if (
-                response := self.client.read(f"{self.base_path}/{key}")
-            ) is not None and "data" in response:
+            if (response := self.client.read(f"{self.base_path}/{key}")) is not None and "data" in response:
                 secret_value = response["data"].get("value")
                 if secret_value is not None:
                     # Store the secret in the cache for future access

@@ -207,9 +207,7 @@ def test_env_contains(monkeypatch):
     env.read_env()
 
     assert "DATABASE_URL" in env
-    assert (
-        env["DATABASE_URL"] == "postgresql://username:password@localhost/database_name"
-    )
+    assert env["DATABASE_URL"] == "postgresql://username:password@localhost/database_name"
     assert "CACHE_URL" in env
     assert env["CACHE_URL"] == "memcache://localhost:11211"
     assert "REDIS_URL" in env
