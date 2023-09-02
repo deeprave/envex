@@ -1,21 +1,32 @@
 # -*- coding: utf-8 -*-
 import os
 import pytest
+import unittest
 
 from envex.lib.hvac_env import SecretsManager
 
-try:
-    import hvac
-except ImportError:
-    hvac = None
 
-
-class TestSecretsManager:
+class TestSecretsManager(unittest.TestCase):
     url = os.getenv("VAULT_ADDR")
     token = os.getenv("VAULT_TOKEN")
 
+    skip_hvac = True
+
+    try:
+        import hvac
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            sm = SecretsManager(self.url, self.token, base_path="test")
+            self.__class__.skip_hvac = sm.client is None
+
+    except ImportError:
+        hvac = None
+
+    # skip tests unless hvac is available
+
     #  Tests that the get_secret method retrieves a secret from the cache if it exists
-    @pytest.mark.skipif(hvac is None, reason="hvac is not installed")
+    @pytest.mark.skipif(skip_hvac, reason="hvac is not functional")
     def test_get_secret_from_cache(self, mocker):
         # Create a SecretsManager instance
         secrets_manager = SecretsManager(self.url, self.token, base_path="test")
@@ -31,7 +42,7 @@ class TestSecretsManager:
         assert result == "secret_value"
 
     #  Tests that the get_secret method retrieves a secret from Vault if it is not in the cache
-    @pytest.mark.skipif(hvac is None, reason="hvac is not installed")
+    @pytest.mark.skipif(skip_hvac, reason="hvac is not functional")
     def test_get_secret_from_vault(self, mocker):
         # Create a SecretsManager instance
         secrets_manager = SecretsManager(self.url, self.token, base_path="test")
@@ -47,11 +58,11 @@ class TestSecretsManager:
         # Call the get_secret method
         result = secrets_manager.get_secret("key")
 
-        # Assert that the secret is retrieved from Vault
+        # Assert that the secret is retrieved from the Vault
         assert result == "secret_value"
 
     #  Tests that the set_secret method sets a secret in Vault and caches it
-    @pytest.mark.skipif(hvac is None, reason="hvac is not installed")
+    @pytest.mark.skipif(skip_hvac, reason="hvac is not functional")
     def test_set_secret_in_vault(self, mocker):
         # Create a SecretsManager instance
         secrets_manager = SecretsManager(self.url, self.token, base_path="test")
@@ -63,7 +74,7 @@ class TestSecretsManager:
         # Call the set_secret method
         secrets_manager.set_secret("key", "secret_value")
 
-        # Assert that the secret is set in Vault
+        # Assert that the secret is set in the Vault
         secrets_manager._client.write.assert_called_once_with(
             "/secret/test/key", value="secret_value"
         )
@@ -72,7 +83,7 @@ class TestSecretsManager:
         secrets_manager._cache.put.assert_called_once_with("key", "secret_value")
 
     #  Tests that the seal method seals the Vault
-    @pytest.mark.skipif(hvac is None, reason="hvac is not installed")
+    @pytest.mark.skipif(skip_hvac, reason="hvac is not functional")
     def test_seal_vault(self, mocker):
         # Create a SecretsManager instance
         secrets_manager = SecretsManager(self.url, self.token, base_path="test")
@@ -88,7 +99,7 @@ class TestSecretsManager:
         assert result is True
 
     #  Tests that the unseal_vault method unseals the Vault with valid keys and root token
-    @pytest.mark.skipif(hvac is None, reason="hvac is not installed")
+    @pytest.mark.skipif(skip_hvac, reason="hvac is not functional")
     def test_unseal_vault(self, mocker):
         # Create a SecretsManager instance
         secrets_manager = SecretsManager(self.url, self.token, base_path="test")
@@ -104,7 +115,7 @@ class TestSecretsManager:
         assert result is True
 
     #  Tests that the unseal_vault method does not unseal the Vault with invalid keys or root token
-    @pytest.mark.skipif(hvac is None, reason="hvac is not installed")
+    @pytest.mark.skipif(skip_hvac, reason="hvac is not functional")
     def test_unseal_vault_invalid_keys(self, mocker):
         # Create a SecretsManager instance
         secrets_manager = SecretsManager(self.url, self.token, base_path="test")

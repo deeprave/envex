@@ -2,6 +2,8 @@
 """
 This optional module is used to interface envex with the hvac (Hashicorp Vault) library.
 """
+import logging
+
 from envex.lib.cache import new_string_cache
 
 
@@ -53,8 +55,13 @@ class SecretsManager:
     @property
     def client(self):
         # returns hvac.Client | None
-        if self._client.is_authenticated():
-            return self._client
+        try:
+            if self._client.is_authenticated():
+                return self._client
+        except Exception as exc:
+            logging.debug(
+                f"{exc.__class__.__name__} Vault client cannot authenticate {exc}"
+            )
 
     @property
     def base_path(self) -> str:
