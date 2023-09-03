@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "envex"
 version = "2.0.0"
-description = "An extended and convenient os.environ interface"
+description = "Environment interface with .env and hashicorp vault support"
 authors = ["David Nugent <davidn@uniquode.io>"]
 readme = "README.md"
 license = "MIT"
