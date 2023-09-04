@@ -118,6 +118,8 @@ def _process_env(
                         )
         return _func, unquote(_key), unquote(_val)
 
+    files_not_found = []
+    files_found = False
     for env_path in _env_files(env_file, search_path, parents, errors):
         # insert PWD as container of env file
         env_path = Path(env_path).resolve()
@@ -133,9 +135,11 @@ def _process_env(
                         func, key, val = process_line(env_path, lineno, line)
                         if func is not None:
                             func(environ, key, val, overwrite=overwrite)
+                files_found = True
         except FileNotFoundError:
-            if errors:
-                raise
+            files_not_found.append(env_path)
+    if errors and not files_found and files_not_found:
+        raise FileNotFoundError(f"{env_file} as {[s.as_posix() for s in files_not_found]}")
     return environ
 
 
