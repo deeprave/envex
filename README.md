@@ -119,27 +119,26 @@ provided environment, which must use the `MutableMapping[str, str]` contract.
 
 ## Vault
 
-Env supports fetching secrets from Hashicorp Vault using the `kv.v2` engine.
-This is a convenient way to store secrets securely, avoiding the need to be in plain text on the filesystem,
-especially plain text files that will be embedded in published docker images.
-It is also a good idea to avoid storing secrets in the operating system's environment, which is open to inspection b
-external processes, although `Env(readenv=True)` already side-steps that.
+In addition to handling of the os environment and .env files, Env supports fetching secrets from Hashicorp Vault using
+the kv.v2 engine.
+This provides a secure secrets store, without exposing them in plain text on the filesystem and in particular in
+published docker images.
+It also prevents storing secrets in the operating system’s environment, which can be inspected by external processes.
+Env can read secrets from the environment variables if you set Env(readenv=True).
 
-Setting up and configuring a vault server is beyond the scope of this document,
-but well worth the investment wherever security of concern (i.e. almost always).
-
-See:
+This document does not cover how to set up and configure a vault server, but you can find useful resources on the
+following websites:
 
 - [hashicorp.com](https://developer.hashicorp.com/vault) for the developer documentation and detailed information and
-  tutorials on setting up your own vault server, and
+  tutorials on setting up and hosting your own vault server, and
 - [vaultproject.io](https://www.vaultproject.io/) for information about HashiCorp's managed cloud offering.
 
-The role assigned to the token used to access the vault server needs it only have `read` capability for the path to the
-secret, and this restriction, and constraint to reading the root path of those secrets, is the recommended policy for
-tokens used at runtime by the application.
+To access the vault server, you need a token with a role that has read permission for the path to the secrets.
+A read only profile is the recommended policy for tokens used at runtime by the application.
 
-The utility `env2hvac` is provided to import (create or update) a typical `.env` file into vault based on a prefix
-comprised of an application and environment name, using the format `<appname>/<envname>/<key>`.
-This utility requires that the `create` role is available to the token used to access the vault server.
-Assuming that the `kv` secrets engine is mounted at `secret/`,
-the final path at which secrets are stored will be `secret/data/<appname>/<envname>/<key>`.
+This library provides a utility called `env2hvac` that can import (create or update) a typical .env file into vault. The
+utility uses a prefix that consists of an application name and an environment name, using the
+format <appname>/<envname>/<key> - for example, myapp/prod/DB_PASSWORD. The utility requires that the token has a role
+with create permission for the base secrets path on the vault server.
+The utility currently assumes that the kv secrets engine is mounted at secret/. The
+final path where the secrets are stored will be secret/data/<appname>/<envname>/<key>.
