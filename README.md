@@ -5,8 +5,7 @@
 [![PyPI version](https://badge.fury.io/py/envex.svg)](https://badge.fury.io/py/envex)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-Overview
---------
+## Overview
 
 This module provides a convenient interface for handling the environment, and therefore configuration of any application
 using 12factor.net principals removing many environment-specific variables and security sensitive information from
@@ -114,5 +113,32 @@ assert env.list('A_LIST_VALUE') == ['1', 'two', '3', 'four']
 assert env('A_LIST_VALUE', type=list) == ['1', 'two', '3', 'four']
 ```
 
-Environment variables are always stored as strings. This is enforced by the underlying os.environ, but also true of any
+Environment variables are always stored as strings.
+This is enforced by the underlying os.environ, but also true of any
 provided environment, which must use the `MutableMapping[str, str]` contract.
+
+## Vault
+
+In addition to handling of the os environment and .env files, Env supports fetching secrets from Hashicorp Vault using
+the kv.v2 engine.
+This provides a secure secrets store, without exposing them in plain text on the filesystem and in particular in
+published docker images.
+It also prevents storing secrets in the operating system’s environment, which can be inspected by external processes.
+Env can read secrets from the environment variables if you set Env(readenv=True).
+
+This document does not cover how to set up and configure a vault server, but you can find useful resources on the
+following websites:
+
+- [hashicorp.com](https://developer.hashicorp.com/vault) for the developer documentation and detailed information and
+  tutorials on setting up and hosting your own vault server, and
+- [vaultproject.io](https://www.vaultproject.io/) for information about HashiCorp's managed cloud offering.
+
+To access the vault server, you need a token with a role that has read permission for the path to the secrets.
+A read only profile is the recommended policy for tokens used at runtime by the application.
+
+This library provides a utility called `env2hvac` that can import (create or update) a typical .env file into vault. The
+utility uses a prefix that consists of an application name and an environment name, using the
+format <appname>/<envname>/<key> - for example, myapp/prod/DB_PASSWORD. The utility requires that the token has a role
+with create permission for the base secrets path on the vault server.
+The utility currently assumes that the kv secrets engine is mounted at secret/. The
+final path where the secrets are stored will be secret/data/<appname>/<envname>/<key>.

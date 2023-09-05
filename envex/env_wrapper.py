@@ -53,6 +53,7 @@ class Env:
         @param verify: (optional) bool whether to verify server cert (default=True)
         @param cache_enabled: (optional) bool whether to cache secrets (default=True)
         @param base_path: (optional) str base path, or "environment" for secrets (default=None)
+        @param working_dirs: (optional) bool whether to include PWD/CWD (default=True)
         @param kwargs: (optional) environment variables to add/override
         """
         self._env = self.os_env() if environ is None else environ
