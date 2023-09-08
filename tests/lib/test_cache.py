@@ -112,3 +112,99 @@ class TestDictStringCache:
 
         with pytest.raises(KeyError):
             _ = cache[key]
+
+    def test_match_no_keys_match_pattern(self, mocker):
+        cache = DictStringCache(10)
+        mocker.patch.object(cache, "get", return_value=None)
+        result = list(cache.match("abc*"))
+        assert len(result) == 0
+
+    def test_match_one_key_matches_pattern(self, mocker):
+        cache = DictStringCache(10)
+        cache.push("abc", "123")
+        result = list(cache.match("abc"))
+        assert len(result) == 1
+        assert result[0] == "abc"
+
+        result = list(cache.match("abc*"))
+        assert len(result) == 1
+        assert result[0] == "abc"
+
+    def test_match_multiple_keys_match_pattern_and_order_added(self, mocker):
+        cache = DictStringCache(10)
+
+        cache.push("abc", "123")
+        cache.push("abcd", "456")
+        cache.push("abcde", "789")
+
+        result = list(cache.match("abc*"))
+
+        assert len(result) == 3
+        assert result[0] == "abc"
+        assert result[1] == "abcd"
+        assert result[2] == "abcde"
+
+    def test_match_order_of_most_recently_accessed_keys(self, mocker):
+        cache = DictStringCache(10)
+
+        cache.push("abc", "123")
+        cache.push("abcd", "456")
+        cache.push("abcde", "789")
+
+        _ = cache.get("abcd")
+        _ = cache.get("abc")
+        _ = cache.get("abcde")
+
+        result = list(cache.match("abc*"))
+
+        # Assert that the result contains the values of
+        # all matching keys in the order of most to least recently accessed
+        assert len(result) == 3
+        assert result[0] == "abcd"
+        assert result[1] == "abc"
+        assert result[2] == "abcde"
+
+    def test_match_order_of_most_recently_accessed_keys_with_evictions(self, mocker):
+        cache = DictStringCache(3)
+
+        cache.push("abc", "123")
+        cache.push("abcd", "456")
+        cache.push("abcde", "789")
+
+        _ = cache.get("abcd")
+        _ = cache.get("abc")
+        _ = cache.get("abcde")
+
+        cache.push("abcdef", "000")
+
+        result = list(cache.match("abc*"))
+
+        # Assert that the result contains the values of all matching keys in the order of
+        # most recently accessed to least recently accessed
+        assert len(result) == 3
+        assert result[0] == "abc"
+        assert result[1] == "abcde"
+        assert result[2] == "abcdef"
+
+    def test_match_with_path_pattern(self, mocker):
+        cache = DictStringCache(10)
+
+        cache.push("test/abc", "123")
+        cache.push("test/abcd", "456")
+        cache.push("test2/abcde", "789")
+
+        result = list(cache.match("test/abc*"))
+        assert len(result) == 2
+        assert result[0] == "test/abc"
+        assert result[1] == "test/abcd"
+
+        result = list(cache.match("test/*"))
+        assert len(result) == 2
+        assert result[0] == "test/abc"
+        assert result[1] == "test/abcd"
+
+        result = list(cache.match("test*"))
+        assert len(result) == 3
+        assert result[0] == "test/abc"
+        assert result[1] == "test/abcd"
+        assert result[2] == "test2/abcde"

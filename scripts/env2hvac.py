@@ -6,14 +6,17 @@ Import variables from a .env file to hashicorp vault.
 import logging
 import os
 
-import hvac
-
 import envex
+from envex.lib.hvac_env import SecretsManager
 
 logging.captureWarnings(True)
 
 
-def main(
+def expand(p: str):
+    return os.path.expandvars(os.path.expanduser(p))
+
+
+def handler(
     files: list[str],
     url: str = None,
     token: str = None,
@@ -23,27 +26,20 @@ def main(
     namespace: str = None,
     environ: str = None,
 ):
-    client = hvac.Client(url=url, token=token, cert=cert, verify=verify)
-    try:
-        if unseal:
-            client.sys.submit_unseal_keys(keys=unseal.split(","))
-        if not client.is_authenticated():
-            # noinspection PyArgumentList
-            logging.fatal("Can't connect or authenticate with Vault", exitcode=1)
-            return
-    except hvac.v1.exceptions.VaultDown as e:
-        # sealed?
-        if client.seal_status["sealed"]:
-            # noinspection PyArgumentList
-            logging.fatal("Vault is currently sealed", exitcode=4)
+    sm = SecretsManager(url=url, token=token, cert=cert, verify=verify)
+    if unseal:
+        sm.unseal(keys=unseal.split(","), root_token=token)
+
+    if sm.client is None:
         # noinspection PyArgumentList
-        logging.fatal(f"Unknown exception connecting with Vault: {e}", exitcode=1)
+        logging.fatal("Can't connect or authenticate with Vault", exitcode=1)
 
-    def expand(p: str):
-        return os.path.expandvars(os.path.expanduser(p))
+    if sm.client.seal_status["sealed"]:
+        # noinspection PyArgumentList
+        logging.fatal("Vault is currently sealed", exitcode=4)
 
     try:
-        path = f"{namespace}/{environ}" if environ else "{namespace}"
+        path = sm.join(namespace, environ)
         for filename in files:
             filename = expand(filename)
             try:
@@ -60,25 +56,22 @@ def main(
                     verify=verify,
                     base_path=path,
                 )
-                items = {k: v for k, v in env.items() if k not in ("CWD", "PWD")}
-                client.secrets.kv.v2.create_or_update_secret(
-                    path=path,
-                    secret=items,
-                    cas=None,
-                    mount_point="secret",
-                )
-                logging.info(f"Added or updated {len(items)} items from {filename} to '{path}'")
-                # comma_nl = ",\n    "
-                # print(f"[\n{comma_nl.join(items.keys())}\n]\n")
+                count = 0
+                for k, v in env.items():
+                    if k not in ("CWD", "PWD"):
+                        key = sm.join(path, k)
+                        sm.set_secret(key, v, nocache=True)
+                        count += 1
+                logging.info(f"Added or updated {count} items from {filename} to '{path}'")
             except IOError as e:
                 logging.error(f"{filename}: {e.__class__.__name__} - {e}")
     finally:
         # reseal the vault
         if unseal:
-            client.sys.seal()
+            sm.seal()
 
 
-if __name__ == "__main__":
+def main():
     import argparse
 
     from scripts.lib.decr_action import Decrement
@@ -178,7 +171,7 @@ if __name__ == "__main__":
 
     log_set_level(args.verbose)
 
-    main(
+    handler(
         args.files,
         url=args.address,
         token=args.token,
@@ -188,3 +181,7 @@ if __name__ == "__main__":
         namespace=args.namespace,
         environ=args.environ,
     )
+
+
+if __name__ == "__main__":
+    main()

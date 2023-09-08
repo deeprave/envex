@@ -68,7 +68,7 @@ class TestSecretsManager:
         secrets_manager.set_secret("key", "secret_value")
 
         # Assert that the secret is set in the Vault
-        secrets_manager._client.write.assert_called_once_with("/secret/test/key", value="secret_value")
+        secrets_manager._client.write.assert_called_once_with("secret/test/key", value="secret_value")
 
         # Assert that the secret is cached
         secrets_manager._cache.put.assert_called_once_with("key", "secret_value")
@@ -100,7 +100,7 @@ class TestSecretsManager:
         secrets_manager._client.sys.submit_unseal_keys.return_value = {"sealed": False}
 
         # Call the unseal_vault method
-        result = secrets_manager.unseal_vault(["key1", "key2"], "root_token")
+        result = secrets_manager.unseal(["key1", "key2"], "root_token")
 
         # Assert that the Vault is unsealed
         assert result is True
@@ -116,7 +116,7 @@ class TestSecretsManager:
         secrets_manager._client.sys.submit_unseal_keys.return_value = {"sealed": True}
 
         # Call the unseal_vault method with invalid keys and root token
-        result = secrets_manager.unseal_vault(["invalid_key"], "invalid_root_token")
+        result = secrets_manager.unseal(["invalid_key"], "invalid_root_token")
 
         # Assert that the Vault is not unsealed
         assert result is False
