@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11"]
+        python-version: ["3.11", "3.10"]
         poetry-version: ["1.5.1"]
 
     steps:
@@ -31,31 +31,10 @@ jobs:
         run: |
           poetry run pytest
 
-  release:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10"]
-        poetry-version: ["1.5.1"]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Setup python and poetry
-        uses: abatilo/actions-poetry@v2.3.0
-        with:
-          poetry-version: ${{ matrix.poetry-version }}
-          python-version: ${{ matrix.python-version }}
-
       - name: Set Poetry Config
         run: |
           poetry config pypi-token.pypi ${{ secrets.PYPI_TOKEN }}
 
-      - name: Build package
-        run: poetry build
-
-      - name: Publish package
+      - name: Build & publish package
+        if: matrix.python-version == '3.10'
         run: poetry publish --build
