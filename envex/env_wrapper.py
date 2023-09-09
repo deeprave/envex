@@ -135,7 +135,7 @@ class Env:
             del self.env[var]
 
     def is_set(self, var):
-        return var in self
+        return var in self.env
 
     def is_all_set(self, *_vars: str | List[str | list | tuple]):
         for v in _vars:

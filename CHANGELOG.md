@@ -1,5 +1,14 @@
 # ChangeLog
 
+### v2.1.0
+
+- Simplified and extended SecretsManager back-end
+  - removed tie to kv secrets engine
+  - add optional 'engine' param to Env/SecretsManager to determine path prefix, or override
+  - add key delete, list methods
+  - add vault seal handler, vault cli no longer required on host to unseal
+  - add support for $VAULT_CACERT to specify CA certificate path
+
 ### v2.0.0
 
 - Support for Hashicorp vault via a secrets manager

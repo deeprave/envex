@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-
+import fnmatch
+from typing import Iterator
 
 __all__ = (
     "StringCacheType",
@@ -40,6 +41,14 @@ class StringCacheType:
         self.push(key, value)  # Add new or update existing key
         return old_value
 
+    def match(self, pattern: str) -> Iterator[str]:
+        keys = []
+        for key in self._cache:
+            if fnmatch.fnmatch(key, pattern):
+                keys.append(key)
+        for key in keys:
+            yield key
+
     def __contains__(self, key: str):
         return self.get(key) is not None
 
@@ -69,6 +78,10 @@ class DictStringCache(StringCacheType):
 
     def push(self, key: str, value: str) -> None:
         if self.capacity > 0:
+            if (
+                key not in self and self.size == self.capacity
+            ):  # Cache is at its capacity,remove the first key (least recently used)
+                self.pop(None)
             self._cache[key] = value
 
     @property
