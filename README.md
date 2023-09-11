@@ -142,3 +142,18 @@ format <appname>/<envname>/<key> - for example, myapp/prod/DB_PASSWORD. The util
 with create permission for the base secrets path on the vault server.
 The utility currently assumes that the kv secrets engine is mounted at secret/. The
 final path where the secrets are stored will be secret/data/<appname>/<envname>/<key>.
+
+### Environment Variables
+
+The SecretsManager and Vault client leverage environment variables for their configuration.
+This ensures a degree of transparency as it allows the client to use them but mitigates the need for the client code to be aware of their presence.
+A summary of these variables is in the following table:
+
+| Variable          | Description                                                              |
+|-------------------|--------------------------------------------------------------------------|
+| VAULT_ADDR        | The URL of the vault server                                              |
+| VAULT_TOKEN       | The vault token to use for authentication                                |
+| VAULT_CACERT      | The path to the CA certificate to use for TLS verification               |
+| VAULT_CAPATH      | The path to a directory of CA certificates to use for TLS verification   |
+| VAULT_CLIENT_CERT | The path to the client certificate to use for TLS connection             |
+| VAULT_CLIENT_KEY  | The path to the client key to use for TLS connection                     |

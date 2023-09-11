@@ -15,6 +15,27 @@ def expand(path: str):
     return os.path.expandvars(os.path.expanduser(path))
 
 
+def read_pem(variable: str, is_key: bool = False):
+    """
+    Get the value of the given environment variable and return it as a PEM string.
+
+    :param variable: The name of the environment variable to retrieve.
+    :return: The PEM string value of the environment variable if it looks valid.
+    """
+    value = os.getenv(variable)
+    if value is not None:
+        value = expand(value)
+        if os.path.isfile(value):
+            with open(value, "r") as f:
+                value = f.read()
+                if is_key:
+                    intro = "PRIVATE KEY"
+                else:
+                    intro = "BEGIN CERTIFICATE"
+                value = value if intro in value else None
+    return value
+
+
 class SecretsManager:
     def __init__(
         self,
@@ -54,6 +75,15 @@ class SecretsManager:
             verify = os.getenv("VAULT_åCACERT") or True
         if isinstance(verify, str):
             verify = expand(verify)
+        if cert is None:
+            cert = (
+                read_pem("VAULT_CLIENT_CERT", False),
+                read_pem("VAULT_CLIENT_KEY", True),
+            )
+            if cert[0] is None:
+                cert = None
+        if base_path is None:
+            base_path = os.getenv("VAULT_PATH", None)
         # noinspection PyBroadException
         try:
             import hvac
