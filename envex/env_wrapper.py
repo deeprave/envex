@@ -32,6 +32,8 @@ class Env:
         verify: bool = True,
         cache_enabled: bool = True,
         base_path: str = None,
+        engine: str | None = None,
+        mount_point: str | None = None,
         **kwargs,
     ):
         """
@@ -40,20 +42,24 @@ class Env:
         @param environ: dict | None default base environment (os.environ is default)
         @param exception: (optional) Exception class to raise on error (default=KeyError)
         @param readenv: read values from .env files (default=False)
-            if true, the following additional args are accepted:
+            - if readenv=True, the following additional args may be used
             @param env_file: str name of the environment file (.env or $ENV default)
-            search_path: None | Union[List[str], List[Path]], str] path(s) to search for env_file
-            overwrite: bool whether to overwrite existing environment variables (default=False)
-            parents: bool whether to search parent directories for env_file (default=False)
-            update: bool whether to update os.environ with values from env_file (default=False)
-            errors: bool whether to raise error on missing env_file (default=False)
+            @param search_path: None | Union[List[str], List[Path]], str] path(s) to search for env_file
+            @param overwrite: bool whether to overwrite existing environment variables (default=False)
+            @param parents: bool whether to search parent directories for env_file (default=False)
+            @param update: bool whether to update os.environ with values from env_file (default=False)
+            @param errors: bool whether to raise error on missing env_file (default=False)
+            - kwargs for vault/secrets manager:
         @param url: (optional) vault url, default is $VAULT_ADDR
         @param token: (optional) vault token, default is $VAULT_TOKEN or ~/.vault-token
         @param cert: (optional) tuple (cert, key) or str path to client cert/key files
-        @param verify: (optional) bool whether to verify server cert (default=True)
+        @param verify: (optional) bool | str whether to verify server cert or set ca cert path (default=True)
         @param cache_enabled: (optional) bool whether to cache secrets (default=True)
-        @param base_path: (optional) str base path, or "environment" for secrets (default=None)
+        @param base_path: (optional) str base path for secrets (default=None)
+        @param engine: (optional) str vault secrets engine (default=None)
+        @param mount_point: (optional) str vault secrets mount point (default=None, determined by engine)
         @param working_dirs: (optional) bool whether to include PWD/CWD (default=True)
+            -
         @param kwargs: (optional) environment variables to add/override
         """
         self._env = self.os_env() if environ is None else environ
@@ -70,6 +76,8 @@ class Env:
             verify=verify,
             cache_enabled=cache_enabled,
             base_path=base_path,
+            engine=engine,
+            mount_point=mount_point,
         )
         self.exception = exception or self._EXCEPTION_CLS
 
@@ -169,7 +177,7 @@ class Env:
         val = self.get(var, default)
         return val if isinstance(val, (list, tuple)) else self._list(val)
 
-    __typemap = {
+    env_typemap = {
         "str": get,
         "int": int,
         "bool": bool,
@@ -184,7 +192,7 @@ class Env:
         _type = kwargs.get("type", str)
         _type = _type if isinstance(_type, str) else _type.__name__
         try:
-            func = self.__typemap[_type]
+            func = self.env_typemap[_type]
             return func(self, var, default=default)
         except KeyError:
             pass

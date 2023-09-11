@@ -1,5 +1,12 @@
 # ChangeLog
 
+### v2.2.0
+
+- Allow base_path to be set via env variable $VAULT_PATH.
+- Add support for $VAULT_CLIENT_CERT and $VAULT_CLIENT_KEY
+
+These changes allow full configuration of the secrets manager backend using the environment.
+
 ### v2.1.0
 
 - Simplified and extended SecretsManager back-end
