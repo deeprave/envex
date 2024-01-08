@@ -124,20 +124,17 @@ def test_env_list(monkeypatch):
     assert result == ["1", "two", "3", "four"]
 
 
-# TODO Rename this here and in `test_env_list`
 def _extracted_from_test_env_list_5(env, arg1, arg2):
     result = env.list(arg1)
     return _extracted_from__extracted_from_test_env_list_10_11(result, arg2)
 
 
-# TODO Rename this here and in `test_env_list`
 def _extracted_from__extracted_from_test_env_list_10_11(result, arg2):
     assert isinstance(result, list)
     assert len(result) == arg2
     return result
 
 
-# TODO Rename this here and in `test_env_list`
 def _extracted_from_test_env_list_10(env, arg1, arg2):
     result = env(arg1, type=list)
     return _extracted_from__extracted_from_test_env_list_10_11(result, arg2)
