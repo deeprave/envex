@@ -72,7 +72,7 @@ class SecretsManager:
         """
         self._mount_point = None
         if verify in (True, None):
-            verify = os.getenv("VAULT_åCACERT") or True
+            verify = os.getenv("VAULT_CACERT") or True
         if isinstance(verify, str):
             verify = expand(verify)
         if cert is None:
@@ -123,6 +123,13 @@ class SecretsManager:
                 return self._client
         except Exception as exc:
             logging.debug(f"{exc.__class__.__name__} Vault client cannot authenticate {exc}")
+
+    @property
+    def sealed(self) -> bool:
+        if self.client:
+            response = self.client.seal_status
+            return response["sealed"]
+        return None
 
     @property
     def base_path(self) -> str:
