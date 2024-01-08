@@ -111,25 +111,33 @@ def test_env_list(monkeypatch):
     monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
     env = envex.Env(readenv=True)
 
-    result = env.list("ALISTOFIPS")
-    assert isinstance(result, list)
-    assert len(result) == 3
+    result = _extracted_from_test_env_list_5(env, "ALISTOFIPS", 3)
     assert result == ["::1", "127.0.0.1", "mydomain.com"]
 
-    result = env("ALISTOFIPS", type=list)
-    assert isinstance(result, list)
-    assert len(result) == 3
+    result = _extracted_from_test_env_list_10(env, "ALISTOFIPS", 3)
     assert result == ["::1", "127.0.0.1", "mydomain.com"]
 
-    result = env.list("LISTOFQUOTEDVALUES")
-    assert isinstance(result, list)
-    assert len(result) == 4
+    result = _extracted_from_test_env_list_5(env, "LISTOFQUOTEDVALUES", 4)
     assert result == ["1", "two", "3", "four"]
 
-    result = env("LISTOFQUOTEDVALUES", type=list)
-    assert isinstance(result, list)
-    assert len(result) == 4
+    result = _extracted_from_test_env_list_10(env, "LISTOFQUOTEDVALUES", 4)
     assert result == ["1", "two", "3", "four"]
+
+
+def _extracted_from_test_env_list_5(env, arg1, arg2):
+    result = env.list(arg1)
+    return _extracted_from__extracted_from_test_env_list_10_11(result, arg2)
+
+
+def _extracted_from__extracted_from_test_env_list_10_11(result, arg2):
+    assert isinstance(result, list)
+    assert len(result) == arg2
+    return result
+
+
+def _extracted_from_test_env_list_10(env, arg1, arg2):
+    result = env(arg1, type=list)
+    return _extracted_from__extracted_from_test_env_list_10_11(result, arg2)
 
 
 def test_env_iter(monkeypatch):
