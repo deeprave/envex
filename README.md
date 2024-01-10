@@ -77,7 +77,6 @@ In addition, Env supports a few HashiCorp Vault configuration parameters:
 * token: (str, optional) vault token, default is `$VAULT_TOKEN` or content of `~/.vault-token`
 * cert: (tuple, optional) (cert, key) path to client certificate and key files
 * verify: (bool, optional) whether to verify server cert (default is True)
-* cache_enabled: (bool, optional) whether to cache secrets (default is True)
 * base_path: (optional) str base path, or "environment" for secrets (default is None).
   This is used to prefix the path to the secret, i.e. `f"/secret/{base_path}/key"`.
 

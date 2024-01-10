@@ -1,5 +1,17 @@
 # ChangeLog
 
+### v3.0.0
+
+- Reduced complexity in vault secrets caching, now simply caches all secrets as a single dict.
+  If non-empty, the cache is always used to return individual values with the assumption that
+  the vault secrets remain unchanged during the lifetime of the process, which is the intended
+  use case.
+- Use <mount_point>/data/<base_path> for secret values, vault kv store compatible.
+- client.write **kwargs to generate the POST api request correctly (previously not working)
+- rewrote and simplified vault secrets related tests using pytest parameterization
+- add `envsecrets` script, used to split a .env into persistent values and inject secrets into vault
+  based on a template. provide an example of how this might be used.
+
 ### v2.2.0
 
 - Allow base_path to be set via env variable $VAULT_PATH.

@@ -7,7 +7,7 @@ import logging
 import os
 
 import envex
-from envex.lib.hvac_env import SecretsManager
+from envex.env_hvac import SecretsManager
 
 logging.captureWarnings(True)
 
@@ -57,11 +57,13 @@ def handler(
                     base_path=path,
                 )
                 count = 0
+                secrets = {}
                 for k, v in env.items():
                     if k not in ("CWD", "PWD"):
                         key = sm.join(path, k)
-                        sm.set_secret(key, v, nocache=True)
-                        count += 1
+                        if v is not None:
+                            secrets[key] = v
+                            count += 1
                 logging.info(f"Added or updated {count} items from {filename} to '{path}'")
             except IOError as e:
                 logging.error(f"{filename}: {e.__class__.__name__} - {e}")

@@ -301,3 +301,4 @@ Session.vim
 .env
 
 requirements.txt
+output.env

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "envex"
-version = "2.3.0"
+version = "3.0.0"
 description = "Environment interface with .env and hashicorp vault support"
 authors = ["David Nugent <davidn@uniquode.io>"]
 readme = "README.md"
@@ -28,7 +28,8 @@ pytest-cov = "^4.1.0"
 hvac = ">= 1.1.1"
 
 [tool.poetry.scripts]
-envex = "scripts.env2hvac:main"
+env2hvac = "scripts.env2hvac:main"
+envsecrets = "scripts.envsecrets:main"
 seal = "scripts.seal:main"
 
 [tool.pytest.ini_options]

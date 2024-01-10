@@ -5,8 +5,9 @@ Type smart wrapper around os.environ
 import re
 from typing import Any, List, MutableMapping, Type
 
+from envex.env_hvac import SecretsManager
+
 from .dot_env import load_env, unquote
-from .lib.hvac_env import SecretsManager
 
 
 class Env:
@@ -30,7 +31,6 @@ class Env:
         token: str = None,
         cert=None,
         verify: bool = True,
-        cache_enabled: bool = True,
         base_path: str = None,
         engine: str | None = None,
         mount_point: str | None = None,
@@ -54,7 +54,6 @@ class Env:
         @param token: (optional) vault token, default is $VAULT_TOKEN or ~/.vault-token
         @param cert: (optional) tuple (cert, key) or str path to client cert/key files
         @param verify: (optional) bool | str whether to verify server cert or set ca cert path (default=True)
-        @param cache_enabled: (optional) bool whether to cache secrets (default=True)
         @param base_path: (optional) str base path for secrets (default=None)
         @param engine: (optional) str vault secrets engine (default=None)
         @param mount_point: (optional) str vault secrets mount point (default=None, determined by engine)
@@ -74,7 +73,6 @@ class Env:
             token=token,
             cert=cert,
             verify=verify,
-            cache_enabled=cache_enabled,
             base_path=base_path,
             engine=engine,
             mount_point=mount_point,
