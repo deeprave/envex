@@ -1,0 +1,13 @@
+version: 2
+exit-zero: false # default: false
+
+secret:
+  # Exclude files and paths by globbing
+  ignored-paths:
+    - 'secrets/example/*'
+    - 'CHANGELOG.md'
+    - 'LICENSE.md'
+    - 'README.md'
+
+  show-secrets: false # default: false
+  ignore-known-secrets: false # default: false
