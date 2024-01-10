@@ -40,5 +40,5 @@ jobs:
           poetry config pypi-token.pypi ${{ secrets.PYPI_TOKEN }}
 
       - name: build and publish package
-        if: matrix.python-version == '3.10' and matrix.poetry-version == '1.7.1'
+        if: matrix.python-version == '3.10' && matrix.poetry-version == '1.7.1'
         run: poetry publish --build
