@@ -4,9 +4,8 @@ This optional module is used to interface envex with the hvac (Hashicorp Vault) 
 """
 import logging
 import os
+import sys
 from typing import Iterator
-
-from envex.lib.cache import new_string_cache
 
 __all__ = ("SecretsManager",)
 
@@ -19,8 +18,9 @@ def read_pem(variable: str, is_key: bool = False):
     """
     Get the value of the given environment variable and return it as a PEM string.
 
-    :param variable: The name of the environment variable to retrieve.
-    :return: The PEM string value of the environment variable if it looks valid.
+    @param variable: The name of the environment variable to retrieve.
+    @param is_key: Whether the file is a cert key or not
+    @returns: The PEM string value of the environment variable if it looks valid.
     """
     value = os.getenv(variable)
     if value is not None:
@@ -28,10 +28,7 @@ def read_pem(variable: str, is_key: bool = False):
         if os.path.isfile(value):
             with open(value, "r") as f:
                 value = f.read()
-                if is_key:
-                    intro = "PRIVATE KEY"
-                else:
-                    intro = "BEGIN CERTIFICATE"
+                intro = "PRIVATE KEY" if is_key else "BEGIN CERTIFICATE"
                 value = value if intro in value else None
     return value
 
@@ -43,7 +40,6 @@ class SecretsManager:
         token: str = None,
         cert=None,
         verify: bool | str = True,
-        cache_enabled: bool = True,
         base_path: str = None,
         engine: str | None = None,
         mount_point: str | None = None,
@@ -66,11 +62,8 @@ class SecretsManager:
         :param allow_redirects (bool): Whether to follow redirects when sending requests to Vault.
         :param session (request.Session): Optional session object to use when performing request.
         :param namespace (str): Optional Vault Namespace.
-        :param cache_enabled (bool): Whether to enable caching for Vault operations.
-            Defaults to True.
         :param kwargs (dict): Additional parameters to pass to the adapter constructor.
         """
-        self._mount_point = None
         if verify in (True, None):
             verify = os.getenv("VAULT_CACERT") or True
         if isinstance(verify, str):
@@ -83,7 +76,9 @@ class SecretsManager:
             if cert[0] is None:
                 cert = None
         if base_path is None:
-            base_path = os.getenv("VAULT_PATH", None)
+            base_path = os.getenv("VAULT_PATH", "")
+        if not mount_point:
+            mount_point = "secret"
         # noinspection PyBroadException
         try:
             import hvac
@@ -92,28 +87,34 @@ class SecretsManager:
             self._client = hvac.Client(url=url, token=token, cert=cert, verify=verify, **kwargs)
             if engine:
                 self._engine = engine.lower()
-                self._mount_point = mount_point
                 response = self._client.sys.list_mounted_secrets_engines()
                 for path, config in response["data"].items():
                     if config["type"] == self._engine:
-                        self._mount_point = path
+                        mount_point = path
                         break
             else:
-                self._engine = None
-                self._mount_point = "secret"
-            if mount_point:
-                self._mount_point = mount_point
+                self._engine = None  # assume kv
         except Exception as e:
-            logging.debug(f"secrets manager disabled: {e.__class__.__name__} {e}")
+            msg = f"{e.__class__.__name__} secrets manager disabled: {e}"
+            logging.debug(msg)
+            print(msg, file=sys.stderr)
             # noinspection PyUnusedLocal
             hvac = None
             self._client = None
-        self._base_path = self.join(mount_point, base_path)
-        self._cache = new_string_cache(64 if cache_enabled else 0)
+        self._mount_point = self.join(mount_point, "data")
+        self._base_path = self.join(self._mount_point, base_path)
+        self._secrets = {}
 
     @staticmethod
     def join(*args, sep="/"):
         return sep.join([a for a in args if a])
+
+    @property
+    def base_path(self) -> str:
+        return self._base_path
+
+    def path(self, key) -> str:
+        return self.join(self.base_path, key)
 
     @property
     def client(self):
@@ -125,59 +126,65 @@ class SecretsManager:
             logging.debug(f"{exc.__class__.__name__} Vault client cannot authenticate {exc}")
 
     @property
-    def sealed(self) -> bool:
+    def secrets(self) -> dict:
+        return self._secrets
+
+    def get_secrets(self, path: str = "") -> dict:
         if self.client:
-            response = self.client.seal_status
-            return response["sealed"]
-        return None
+            response = self.client.read(self.path(path))
+            if response is not None and "data" in response:
+                self._secrets = response["data"].get("value", {})
+        return self.secrets
 
-    @property
-    def base_path(self) -> str:
-        return self._base_path
+    def set_secrets(self, path: str = "", values: dict | None = None):
+        if self.client and values:
+            self._secrets |= values
+            if self.secrets:
+                self.client.write(self.path(path), data=self.secrets)
+            else:
+                self.client.delete(self.path(path))
 
-    def path(self, key) -> str:
-        return self.join(self.base_path, key)
+    def delete_secrets(self, path: str = "") -> None:
+        if self.client:
+            self.client.delete(self.path(path))
+        self._secrets.clear()
 
-    def reset_cache(self):
-        self._cache = self._cache.clear()
-
-    def __get_secret_from_cache(self, key) -> str | None:
-        return self._cache.get(key, default=None)
-
-    def __store_secret_in_cache(self, key, value):
-        self._cache[key] = value
-
-    def get_secret(
-        self,
-        key: str,
-        default: str | None = None,
-        error: bool = False,
-        nocache: bool = False,
-    ):
+    def get_secret(self, key: str, default: str | None = None, error: bool = False):
         if self.client:
             # Check if the secret is already in the cache
-            if (secret := self.__get_secret_from_cache(key)) is not None:
-                return secret
-
-            # Retrieve the secret from Hashicorp Vault
-            if (response := self.client.read(self.path(key))) is not None and "data" in response:
-                secret_value = response["data"].get("value")
-                if secret_value is not None:
-                    # Store the secret in the cache for future access
-                    if not nocache:
-                        self.__store_secret_in_cache(key, secret_value)
-                    return secret_value
-
+            if not self.secrets:
+                self.get_secrets()
+            if key in self.secrets:
+                return self.secrets[key]
         if error and default is None:
             raise KeyError(key)
         # Placeholder or None value when hvac is not available or secret not found
         return default
 
-    def set_secret(self, key: str, value: str, nocache: bool = False):
+    def set_secret(self, key: str, value: str):
         if self.client and not any((key is None, value is None)):
-            self.client.write(self.path(key), value=value)
-            if not nocache:
-                self.__store_secret_in_cache(key, value)
+            if not self.secrets:
+                self.get_secrets()
+            self.secrets[key] = value
+            self.client.write(self.path(key), **self.secrets)
+
+    def delete_secret(self, key: str, path: str = "") -> None:
+        if self.client:
+            if not self.secrets:
+                self.get_secrets()
+            if self.secrets and key in self.secrets:
+                del self.secrets[key]
+                if self.secrets:
+                    self.client.write(self.path(path), **self.secrets)
+                else:
+                    self.client.delete(self.path(path))
+                self.secrets.clear()
+
+    def list_secrets(self, path: str = "") -> Iterator[str]:
+        if self.client:
+            if not self.secrets:
+                self.get_secrets()
+            yield from self.secrets.keys()
 
     def __getitem__(self, item: str):
         return self.get_secret(item, error=True)
@@ -201,19 +208,9 @@ class SecretsManager:
             return not response["sealed"]
         return None
 
-    def list_secrets(self, key) -> Iterator[str]:
+    @property
+    def sealed(self) -> bool | None:
         if self.client:
-            response = self.client.list(self.path(key))
-            if response is not None:
-                data = response["data"]
-                if "keys" in data:
-                    for key in data["keys"]:
-                        yield key
-
-    def delete_secret(self, path) -> None:
-        if self.client:
-            self.client.delete(self.path(path))
-            # clear it and contained elements as well
-            for k in self._cache.match(self.join(path, "*")):
-                self._cache.pop(k)
-            self._cache.pop(path)
+            response = self.client.seal_status
+            return response["sealed"]
+        return None
