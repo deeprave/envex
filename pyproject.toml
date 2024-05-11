@@ -21,6 +21,7 @@ pre-commit = ">= 3.7"
 pytest = ">=7.0"
 pytest-mock = "^3.11.1"
 pytest-cov = "^4.1.0"
+testcontainers = "^4.4.0"
 
 [tool.poetry.group.vault.dependencies]
 hvac = ">= 1.1.1"
@@ -35,6 +36,8 @@ namespace-packages = ["envex"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"
+markers = "integration: mark a test as an integration test"
+addopts = "-m 'not integration'"
 pythonpath = ["."]
 testpaths = ["tests"]
 

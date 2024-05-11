@@ -28,7 +28,7 @@ def mock_init_client():
             return self.authenticated
 
         def read(self, path):
-            return {"data": {"value": self.secrets.get(path)}}
+            return {"data": {"data": self.secrets.get(path)}}
 
         def write(self, path, **kwargs):
             self.secrets[path] = kwargs
@@ -132,8 +132,8 @@ def secrets_manager():
     class MockClient:
         def read(self, path):
             mock_responses = {
-                "secret/data/valid/path": {"data": {"value": {"secret_key": "secret_value"}}},
-                "secret/data/valid/empty": {"data": {"value": {}}},
+                "secret/data/valid/path": {"data": {"data": {"secret_key": "secret_value"}}},
+                "secret/data/valid/empty": {"data": {"data": {}}},
                 "secret/data/no/data": {},
                 None: None,
             }
