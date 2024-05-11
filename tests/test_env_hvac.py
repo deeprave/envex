@@ -130,6 +130,8 @@ def test_secrets_manager_initialization(
 def secrets_manager():
     # Mock class to simulate the client's behaviour
     class MockClient:
+        seal_status = {"sealed": False}
+
         def read(self, path):
             mock_responses = {
                 "secret/data/valid/path": {"data": {"data": {"secret_key": "secret_value"}}},
@@ -142,8 +144,28 @@ def secrets_manager():
         def write(self, path, **kwargs):
             pass
 
+        def write_data(self, path, **kwargs):
+            pass
+
         def delete(self, path):
             pass
+
+        @property
+        def sys(self):
+            class Sys:
+                def seal(self):
+                    MockClient.seal_status["sealed"] = True
+                    return MockClient.seal_status
+
+                def unseal(self, keys, root_token):
+                    MockClient.seal_status["sealed"] = False
+                    return MockClient.seal_status
+
+                def submit_unseal_keys(self, keys, root_token):
+                    MockClient.seal_status["sealed"] = False
+                    return MockClient.seal_status
+
+            return Sys()
 
     class SecretsManagerEx(SecretsManager):
         def __init__(self):
@@ -197,3 +219,47 @@ def test_get_secrets(secrets_manager, test_input, test_input_key, expected_outpu
     secrets_manager.delete_secrets(test_input)
 
     assert secrets_manager.secrets == {}
+
+
+@pytest.mark.parametrize(
+    "test_input_key, expected_inital_output, modified_value, test_id",
+    [
+        # Happy path tests with various test values
+        (
+            "not_a_secret_key",
+            None,
+            "new_value",
+            "happy_path_valid_data",
+        ),
+        ("secret_key", None, None, "happy_path_empty_data"),
+        # Edge cases
+        ("", None, None, "edge_case_no_path"),
+        ("", None, None, "edge_case_no_data_in_response"),
+        # Error cases
+        (None, None, None, "error_case_none_path"),
+    ],
+)
+def test_get_set_secret(secrets_manager, test_input_key, expected_inital_output, modified_value, test_id):
+    result = secrets_manager.get_secret(test_input_key)
+    assert result == expected_inital_output, f"get_secret({test_input_key}) failed for test_id: {test_id}"
+
+    secrets_manager.set_secret(test_input_key, modified_value)
+    result = secrets_manager.get_secret(test_input_key)
+    assert result == modified_value, f"get_secret({test_input_key}) failed for test_id: {test_id}"
+
+    result = list(secrets_manager.list_secrets())
+    expected_result = [test_input_key] if modified_value else []
+    assert result == expected_result, f"list_secrets() failed for test_id: {test_id}"
+
+    secrets_manager.delete_secret(test_input_key)
+    assert secrets_manager.secrets == {}, f"delete_secret({test_input_key}) failed for test_id: {test_id}"
+
+    result = list(secrets_manager.list_secrets())
+    assert not result
+
+
+def test_seal_unseal(secrets_manager):
+    secrets_manager.seal()
+    assert secrets_manager.sealed
+    secrets_manager.unseal(None, None)
+    assert not secrets_manager.sealed

@@ -200,16 +200,6 @@ class SecretsManager:
                 self.get_secrets()
             yield from self.secrets.keys()
 
-    def __getitem__(self, item: str):
-        return self.get_secret(item, error=True)
-
-    def __setitem__(self, key: str, value: str):
-        assert value is not None, "Secret value cannot be None"
-        self.set_secret(key, value)
-
-    def __delitem__(self, key: str):
-        self.delete_secret(key)
-
     def seal(self):
         if self.client:
             response = self.client.sys.seal()
