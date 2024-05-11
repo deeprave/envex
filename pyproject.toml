@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "envex"
-version = "3.1.0"
+version = "3.1.1"
 description = "Environment interface with .env and hashicorp vault support"
 authors = ["David Nugent <davidn@uniquode.io>"]
 readme = "README.md"
