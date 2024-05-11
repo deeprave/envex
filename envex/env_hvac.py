@@ -4,7 +4,6 @@ This optional module is used to interface envex with the hvac (Hashicorp Vault) 
 """
 import logging
 import os
-import sys
 from typing import Iterator
 
 __all__ = ("SecretsManager",)
@@ -34,6 +33,8 @@ def read_pem(variable: str, is_key: bool = False):
 
 
 class SecretsManager:
+    hvac_disabled = False
+
     def __init__(
         self,
         url: str = None,
@@ -43,6 +44,7 @@ class SecretsManager:
         base_path: str = None,
         engine: str | None = None,
         mount_point: str | None = None,
+        timeout: int | None = None,
         **kwargs,
     ):
         """
@@ -79,28 +81,40 @@ class SecretsManager:
             base_path = os.getenv("VAULT_PATH", "")
         if not mount_point:
             mount_point = "secret"
-        # noinspection PyBroadException
-        try:
-            import hvac
-
-            self._client: hvac.Client
-            self._client = hvac.Client(url=url, token=token, cert=cert, verify=verify, **kwargs)
-            if engine:
-                self._engine = engine.lower()
-                response = self._client.sys.list_mounted_secrets_engines()
-                for path, config in response["data"].items():
-                    if config["type"] == self._engine:
-                        mount_point = path
-                        break
-            else:
-                self._engine = None  # assume kv
-        except Exception as e:
-            msg = f"{e.__class__.__name__} secrets manager disabled: {e}"
-            logging.debug(msg)
-            print(msg, file=sys.stderr)
-            # noinspection PyUnusedLocal
-            hvac = None
+        if SecretsManager.hvac_disabled:
             self._client = None
+        else:
+            # noinspection PyBroadException
+            try:
+                import hvac
+
+                timeout = timeout or int(os.getenv("VAULT_TIMEOUT", "5"))
+
+                self._client: hvac.Client
+                self._client = hvac.Client(
+                    url=url,
+                    token=token,
+                    cert=cert,
+                    verify=verify,
+                    timeout=timeout,
+                    **kwargs,
+                )
+                if engine:
+                    self._engine = engine.lower()
+                    response = self._client.sys.list_mounted_secrets_engines()
+                    for path, config in response["data"].items():
+                        if config["type"] == self._engine:
+                            mount_point = path
+                            break
+                else:
+                    self._engine = None  # assume kv
+            except Exception as e:
+                msg = f"{e.__class__.__name__} secrets manager disabled: {e}"
+                logging.debug(msg)
+                SecretsManager.hvac_disabled = True
+                # noinspection PyUnusedLocal
+                hvac = None
+                self._client = None
         self._mount_point = self.join(mount_point, "data")
         self._base_path = self.join(self._mount_point, base_path)
         self._secrets = {}
@@ -123,7 +137,9 @@ class SecretsManager:
             if self._client.is_authenticated():
                 return self._client
         except Exception as exc:
-            logging.debug(f"{exc.__class__.__name__} Vault client cannot authenticate {exc}")
+            logging.debug(
+                f"{exc.__class__.__name__} Vault client cannot authenticate {exc}"
+            )
 
     @property
     def secrets(self) -> dict:

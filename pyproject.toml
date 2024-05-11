@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "envex"
-version = "3.0.3"
+version = "3.1.0"
 description = "Environment interface with .env and hashicorp vault support"
 authors = ["David Nugent <davidn@uniquode.io>"]
 readme = "README.md"
@@ -11,13 +11,11 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">= 3.10, < 4.0"
+python = ">=3.10.0,<4.0.0"
 
 [tool.poetry.group.dev.dependencies]
-black = ">=23.7,<25.0"
-isort = "^5.12.0"
-ruff = "^0.0.285"
-pre-commit = "^3.3.3"
+ruff = ">= 0.4.4"
+pre-commit = ">= 3.7"
 
 [tool.poetry.group.test.dependencies]
 pytest = ">=7.0"
@@ -31,6 +29,9 @@ hvac = ">= 1.1.1"
 env2hvac = "scripts.env2hvac:main"
 envsecrets = "scripts.envsecrets:main"
 seal = "scripts.seal:main"
+
+[tool.ruff]
+namespace-packages = ["envex"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"
