@@ -1,5 +1,11 @@
 # ChangeLog
 
+### v3.1.1
+
+- Add testcontainers for development
+- Add integration test to test against a "real"  (testcontainers) Vault
+- Improve test coverage
+
 ### v3.1.0
 
 - Replace many pre-commit hooks with ruff
