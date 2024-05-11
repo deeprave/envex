@@ -1,5 +1,16 @@
 # ChangeLog
 
+### v3.1.0
+
+- Replace many pre-commit hooks with ruff
+- Use a separate configuration file `ruff.toml` for ruff with only local tweaks in `pyproject.toml`
+
+### v3.0.4
+
+- Add timeout configuration to secretsmangager client and default 5s to reduce wait time when vault is unavailable. May be overridden in code or using the VAULT_TIMEOUT environment variable.
+- exclude example files from guardian scanning
+- github workflow changes
+
 ### v3.0.0
 
 - Reduced complexity in vault secrets caching, now simply caches all secrets as a single dict.

@@ -13,7 +13,7 @@ description = """\
 Seal or [-u] unseal a vault
 Uses environment variables:
   VAULT_ADDR - vault server url
-  VAULT_CACERT - optional path to CA cert key
+  VAULT_CACERT - optional path to CA public certificate
   VAULT_TOKEN  - vault token with sufficient privilege
   VAULT_UNSEAL_KEYS <value,value,vault> - keys to unseal (if unsealing)
 """
