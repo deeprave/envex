@@ -2,6 +2,7 @@
 """
 This optional module is used to interface envex with the hvac (Hashicorp Vault) library.
 """
+
 import logging
 import os
 from typing import Iterator
@@ -115,13 +116,12 @@ class SecretsManager:
                 # noinspection PyUnusedLocal
                 hvac = None
                 self._client = None
-        self._mount_point = self.join(mount_point, "data")
-        self._base_path = self.join(self._mount_point, base_path)
+        self._base_path = self.join(mount_point, "data", base_path)
         self._secrets = {}
 
     @staticmethod
     def join(*args, sep="/"):
-        return sep.join([a for a in args if a])
+        return sep.join([a.strip(sep) for a in args if a])
 
     @property
     def base_path(self) -> str:
@@ -137,9 +137,7 @@ class SecretsManager:
             if self._client.is_authenticated():
                 return self._client
         except Exception as exc:
-            logging.debug(
-                f"{exc.__class__.__name__} Vault client cannot authenticate {exc}"
-            )
+            logging.debug(f"{exc.__class__.__name__} Vault client cannot authenticate {exc}")
 
     @property
     def secrets(self) -> dict:
@@ -149,7 +147,7 @@ class SecretsManager:
         if self.client:
             response = self.client.read(self.path(path))
             if response is not None and "data" in response:
-                self._secrets = response["data"].get("value", {})
+                self._secrets = response["data"].get("data", {})
         return self.secrets
 
     def set_secrets(self, path: str = "", values: dict | None = None):
@@ -182,7 +180,7 @@ class SecretsManager:
             if not self.secrets:
                 self.get_secrets()
             self.secrets[key] = value
-            self.client.write(self.path(key), **self.secrets)
+            self.client.write_data(self.path(""), data=dict(data=self.secrets))
 
     def delete_secret(self, key: str, path: str = "") -> None:
         if self.client:
@@ -191,10 +189,10 @@ class SecretsManager:
             if self.secrets and key in self.secrets:
                 del self.secrets[key]
                 if self.secrets:
-                    self.client.write(self.path(path), **self.secrets)
+                    self.client.write_data(self.path(path), data=dict(data=self.secrets))
                 else:
                     self.client.delete(self.path(path))
-                self.secrets.clear()
+                    self.secrets.clear()
 
     def list_secrets(self, path: str = "") -> Iterator[str]:
         if self.client:
