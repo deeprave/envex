@@ -2,6 +2,8 @@
 """
 Type smart wrapper around os.environ
 """
+
+import contextlib
 import re
 from typing import Any, List, MutableMapping, Type
 
@@ -72,7 +74,9 @@ class Env:
             url=url,
             token=token,
             cert=cert,
-            verify=verify,
+            verify=verify
+            if verify is not None
+            else not self.env.get("VAULT_SKIP_VERIFY", False),
             base_path=base_path,
             engine=engine,
             mount_point=mount_point,
@@ -190,11 +194,9 @@ class Env:
             self.set(var, default)
         _type = kwargs.get("type", str)
         _type = _type if isinstance(_type, str) else _type.__name__
-        try:
+        with contextlib.suppress(KeyError):
             func = self.env_typemap[_type]
             return func(self, var, default=default)
-        except KeyError:
-            pass
         return self.get(var, default)
 
     def export(self, *args, **kwargs):
@@ -205,7 +207,7 @@ class Env:
                 raise TypeError(
                     "export() requires either dictionaries or keyword=value pairs"
                 )
-            kwargs |= {k: v for k, v in arg.items()}
+            kwargs |= dict(arg.items())
         if not args and not kwargs:
             kwargs = self.env
         for k, v in kwargs.items():
@@ -223,9 +225,7 @@ class Env:
     @classmethod
     def _true_values(cls, val):
         return (
-            cls._BOOLEAN_TRUE_STRINGS
-            if isinstance(val, str)
-            else cls._BOOLEAN_TRUE_BYTES
+            cls._BOOLEAN_TRUE_STRINGS if isinstance(val, str) else cls._BOOLEAN_TRUE_BYTES
         )
 
     @classmethod
@@ -235,7 +235,7 @@ class Env:
         if not isinstance(val, (str, bytes)):
             return bool(val)
         true_vals = cls._true_values(val)
-        return True if val and any([val.startswith(v) for v in true_vals]) else False
+        return bool(val and any(val.startswith(v) for v in true_vals))
 
     @classmethod
     def _int(cls, val):
@@ -270,8 +270,7 @@ class Env:
         self.unset(var)
 
     def items(self):
-        for var, val in self.env.items():
-            yield var, val
+        yield from self.env.items()
 
     def __iter__(self):
         return self.items()
