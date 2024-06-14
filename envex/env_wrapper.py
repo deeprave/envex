@@ -20,7 +20,7 @@ class Env:
     _exception: Type[Exception]
 
     _BOOLEAN_TRUE_STRINGS = ("T", "t", "1", "on", "ok", "Y", "y", "en")
-    _BOOLEAN_TRUE_BYTES = (s.encode("utf-8") for s in _BOOLEAN_TRUE_STRINGS)
+    _BOOLEAN_TRUE_BYTES = (b"T", b"t", b"1", b"on", b"ok", b"Y", b"y", b"en")
     _EXCEPTION_CLS = KeyError
 
     def __init__(
