@@ -3,7 +3,6 @@
   <component name="RuffConfigService">
     <option name="alwaysUseGlobalRuff" value="true" />
     <option name="globalRuffExecutablePath" value="/opt/homebrew/bin/ruff" />
-    <option name="projectRuffExecutablePath" value="$USER_HOME$/Library/Caches/pypoetry/virtualenvs/django-settings-env-VOQU9kUv-py3.12/bin/ruff" />
     <option name="ruffConfigPath" value="$PROJECT_DIR$/ruff.toml" />
     <option name="runRuffOnSave" value="true" />
     <option name="useRuffFormat" value="true" />

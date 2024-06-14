@@ -1,6 +1,6 @@
 extend = "./pyproject.toml"
 extend-exclude = [".venv", ".idea", ".vscode", ".*_cache"]
-line-length = 120
+line-length = 90
 indent-width = 4
 fix = true
 output-format = "full"

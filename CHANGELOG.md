@@ -1,5 +1,11 @@
 # ChangeLog
 
+### v3.1.2
+
+- dependency updates
+- minor logging tweaks
+- iron out some warts
+
 ### v3.1.1
 
 - Add testcontainers for development

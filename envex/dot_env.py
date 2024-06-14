@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-import contextlib
 import os
 import sys
+import contextlib
 from pathlib import Path
 from string import Template
 from typing import List, MutableMapping, Union
@@ -22,20 +22,24 @@ def unquote(line, quotes="\"'"):
     return line
 
 
-def _env_default(environ: MutableMapping[str, str], key: str, val: str, overwrite: bool = False):
-    if key and val:
-        if overwrite or key not in environ:
-            environ[key] = val
+def _env_default(
+    environ: MutableMapping[str, str], key: str, val: str, overwrite: bool = False
+):
+    if key and val and (overwrite or key not in environ):
+        environ[key] = val
 
 
-def _env_export(environ: MutableMapping[str, str], key: str, val: str, overwrite: bool = False):
-    if key and val:
-        if overwrite or key not in environ:
-            environ[key] = val
-            os.environ[key] = val
+def _env_export(
+    environ: MutableMapping[str, str], key: str, val: str, overwrite: bool = False
+):
+    if key and val and (overwrite or key not in environ):
+        environ[key] = val
+        os.environ[key] = val
 
 
-def _env_files(env_file: str, search_path: List[Path], parents: bool, errors: bool) -> List[str]:
+def _env_files(
+    env_file: str, search_path: List[Path], parents: bool, errors: bool
+) -> List[str]:
     """expand env_file with the full search path, optionally parents as well"""
 
     searched = []
@@ -139,7 +143,9 @@ def _process_env(
         except FileNotFoundError:
             files_not_found.append(env_path)
     if errors and not files_found and files_not_found:
-        raise FileNotFoundError(f"{env_file} as {[s.as_posix() for s in files_not_found]}")
+        raise FileNotFoundError(
+            f"{env_file} as {[s.as_posix() for s in files_not_found]}"
+        )
     return environ
 
 

@@ -3,6 +3,7 @@
 """
 Import variables from a .env file to hashicorp vault.
 """
+
 import logging
 import os
 
@@ -32,11 +33,13 @@ def handler(
 
     if sm.client is None:
         # noinspection PyArgumentList
-        logging.fatal("Can't connect or authenticate with Vault", exitcode=1)
+        logging.fatal(
+            "Can't connect or authenticate with Vault", exc_info=False, exitcode=1
+        )
 
     if sm.client.seal_status["sealed"]:
         # noinspection PyArgumentList
-        logging.fatal("Vault is currently sealed", exitcode=4)
+        logging.fatal("Vault is currently sealed", exc_info=False, exitcode=4)
 
     try:
         path = sm.join(namespace, environ)
@@ -64,9 +67,11 @@ def handler(
                         if v is not None:
                             secrets[key] = v
                             count += 1
-                logging.info(f"Added or updated {count} items from {filename} to '{path}'")
+                logging.info(
+                    f"Added or updated {count} items from {filename} to '{path}'"
+                )
             except IOError as e:
-                logging.error(f"{filename}: {e.__class__.__name__} - {e}")
+                logging.error(f"{filename}: {e.__class__.__name__}", exc_info=True)
     finally:
         # reseal the vault
         if unseal:

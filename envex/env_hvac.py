@@ -137,7 +137,9 @@ class SecretsManager:
             if self._client.is_authenticated():
                 return self._client
         except Exception as exc:
-            logging.debug(f"{exc.__class__.__name__} Vault client cannot authenticate {exc}")
+            logging.debug(
+                f"{exc.__class__.__name__} Vault client cannot authenticate {exc}"
+            )
 
     @property
     def secrets(self) -> dict:
