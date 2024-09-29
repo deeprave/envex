@@ -3,8 +3,11 @@
   <component name="RuffConfigService">
     <option name="alwaysUseGlobalRuff" value="true" />
     <option name="globalRuffExecutablePath" value="/opt/homebrew/bin/ruff" />
+    <option name="globalRuffLspExecutablePath" value="/opt/homebrew/bin/ruff-lsp" />
+    <option name="projectRuffExecutablePath" value="$USER_HOME$/Library/Caches/pypoetry/virtualenvs/envex-ZQVANtdW-py3.12/bin/ruff" />
     <option name="ruffConfigPath" value="$PROJECT_DIR$/ruff.toml" />
     <option name="runRuffOnSave" value="true" />
     <option name="useRuffFormat" value="true" />
+    <option name="useRuffServer" value="true" />
   </component>
 </project>
