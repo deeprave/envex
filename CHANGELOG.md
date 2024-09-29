@@ -1,5 +1,10 @@
 # ChangeLog
 
+### v3.2.0
+
+- upgrade dependencies (several) including vulnerability fixes
+- (dev) combined test & development dependency groups
+
 ### v3.1.2
 
 - dependency updates
@@ -54,15 +59,15 @@ These changes allow full configuration of the secrets manager backend using the 
 ### v2.0.0
 
 - Support for Hashicorp vault via a secrets manager
-    - install optional "hvac" dependency to enable, else no-op
-    - read hvac documentation for usage (eg VAULT_TOKEN and VAULT_ADDR)
-    - by default, environment values override vault ones. To modify this
-      behaviour, set ENVEX_SRC=vault to have vault values override.
-      ENVEX_SRC=env by default.
-    - args to Env() added to support vault client configuration
-    - vault secrets are cached by default
-    - base_path arg may be used to set a based vault path, i.e. f"/secret/{base_path}/key",
-      allowing specific secrets to be used for different environments and roles
+  - install optional "hvac" dependency to enable, else no-op
+  - read hvac documentation for usage (eg VAULT_TOKEN and VAULT_ADDR)
+  - by default, environment values override vault ones. To modify this
+    behaviour, set ENVEX_SRC=vault to have vault values override.
+    ENVEX_SRC=env by default.
+  - args to Env() added to support vault client configuration
+  - vault secrets are cached by default
+  - base_path arg may be used to set a based vault path, i.e. f"/secret/{base_path}/key",
+    allowing specific secrets to be used for different environments and roles
 
 ### v1.6.0
 
@@ -91,7 +96,7 @@ These changes allow full configuration of the secrets manager backend using the 
 ### v1.1.0
 
 - updated implied `$PWD` handling:
-    - `$CWD` is setdefault for the process current directory (this was previously $PWD)
-    - `$PWD` is setdefault for the directory containing the .env file
+  - `$CWD` is setdefault for the process current directory (this was previously $PWD)
+  - `$PWD` is setdefault for the directory containing the .env file
 - errors: bool arg load_env and friends, defaults to False
-    - if errors=True, FileNotFoundError is raised when no usable .env (`$DOTENV`) file is found
+  - if errors=True, FileNotFoundError is raised when no usable .env (`$DOTENV`) file is found
