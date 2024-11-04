@@ -17,7 +17,7 @@ ruff = ">= 0.4.4"
 pre-commit = ">= 3.7"
 pytest = ">=7.0"
 pytest-mock = "^3.11.1"
-pytest-cov = ">=4.1,<6.0"
+pytest-cov = ">=4.1,<7.0"
 testcontainers = "^4.4.0"
 
 [tool.poetry.group.vault.dependencies]
