@@ -11,6 +11,7 @@ authors = [
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
+scripts = {env2hvac = "scripts.env2hvac:main", envsecrets = "scripts.envsecrets:main", seal = "scripts.seal:main"}
 
 [tool.ruff]
 namespace-packages = ["envex"]
