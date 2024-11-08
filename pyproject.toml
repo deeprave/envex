@@ -1,32 +1,16 @@
-[tool.poetry]
+[project]
 name = "envex"
-version = "3.2.0"
+version = "3.3.0"
 description = "Environment interface with .env and hashicorp vault support"
-authors = ["David Nugent <davidn@uniquode.io>"]
 readme = "README.md"
-license = "MIT"
+license = { file = "LICENSE.md" }
+requires-python = ">=3.10"
+authors = [
+    { name = "David Nugent", email = "davidn@uniquode.io" }
+]
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
-
-[tool.poetry.dependencies]
-python = ">=3.10.0,<4.0.0"
-
-[tool.poetry.group.dev.dependencies]
-ruff = ">= 0.4.4"
-pre-commit = ">= 3.7"
-pytest = ">=7.0"
-pytest-mock = "^3.11.1"
-pytest-cov = ">=4.1,<7.0"
-testcontainers = "^4.4.0"
-
-[tool.poetry.group.vault.dependencies]
-hvac = ">= 1.1.1"
-
-[tool.poetry.scripts]
-env2hvac = "scripts.env2hvac:main"
-envsecrets = "scripts.envsecrets:main"
-seal = "scripts.seal:main"
 
 [tool.ruff]
 namespace-packages = ["envex"]
@@ -38,6 +22,14 @@ addopts = "-m 'not integration'"
 pythonpath = ["."]
 testpaths = ["tests"]
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[dependency-groups]
+dev = [
+    "pytest-cov>=4.1,<7.0",
+    "pytest-mock>=3.11.1",
+    "pytest>=7.0",
+    "ruff>=0.4.4",
+    "testcontainers>=4.4.0",
+]
+vault = [
+    "hvac>=1.1.1",
+]
