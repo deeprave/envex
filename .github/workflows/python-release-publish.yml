@@ -30,4 +30,4 @@ jobs:
       - name: build and publish package
         if: matrix.python-version == env.TARGET_PYTHON_VERSION
         shell: bash
-        run: uv publish --build --token ${{ secrets.PYPI_TOKEN }}
+        run: uv publish --token ${{ secrets.PYPI_TOKEN }}
