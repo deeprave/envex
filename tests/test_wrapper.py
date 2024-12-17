@@ -325,3 +325,21 @@ def test_encrypted_stream_bytes_env(password):
     assert env("ONE") == "1"
     assert env("ARG2") == "two"
     assert env("ENABLED") == "true"
+
+
+def test_encrypted_stream_bytes2(password):
+    data = b"ONE=1\nARG2=two\nENABLED=true\n"
+    stream = encrypt_data(io.BytesIO(data), password)
+    env = envex.Env(stream, decrypt=True, password=password)
+    assert env("ONE") == "1"
+    assert env("ARG2") == "two"
+    assert env("ENABLED") == "true"
+
+
+def test_encrypted_stream_invalid_format(password):
+    import os
+    # Create an invalid encrypted format by using random bytes
+    invalid_data = os.urandom(100)
+
+    with pytest.raises(UnicodeDecodeError):
+        envex.Env(io.BytesIO(invalid_data), decrypt=True, password=password)
