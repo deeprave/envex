@@ -93,11 +93,15 @@ try:
         # Generate random IV
         iv = secrets.token_bytes(16)
 
-        # Create cipher
-        cipher = AES.new(key, AES.MODE_CBC, iv)
+        try:
+            # Create cipher
+            cipher = AES.new(key, AES.MODE_CBC, iv)
 
-        # Pad and encrypt the data
-        encrypted_data = cipher.encrypt(_pad(input_stream.getvalue()))
+            # Pad and encrypt the data
+            encrypted_data = cipher.encrypt(_pad(input_stream.getvalue()))
+        except ValueError as exc:
+            raise DecryptError(*exc.args) from exc
+
         logger.debug(f"Encryption successful ({len(encrypted_data)} + 36 bytes)")
 
         # Write magic bytes, salt, IV, and encrypted data
@@ -120,10 +124,10 @@ try:
         key, _ = generate_key_from_password(password, salt)
 
         # Create cipher
-        cipher = AES.new(key, AES.MODE_CBC, iv)
-        padded_decrypted_data = cipher.decrypt(encrypted_data)
-        # Decrypt and unpad the data
         try:
+            cipher = AES.new(key, AES.MODE_CBC, iv)
+            padded_decrypted_data = cipher.decrypt(encrypted_data)
+            # Decrypt and unpad the data
             decrypted_data = _unpad(padded_decrypted_data)
         except ValueError as e:
             raise DecryptError("Incorrect password or invalid data") from e
