@@ -31,9 +31,10 @@ def test_encrypt_data_success(password):
     assert isinstance(result, BytesIO)
     assert result.getvalue() != b"test data"  # Ensure data is encrypted
 
+
 @pytest.mark.unit
 def test_encrypt_decrypt_unicode_(password):
-    test_string = "\u00A9 test data \u06A2"
+    test_string = "\u00a9 test data \u06a2"
     input_data = StringIO(test_string)
     result = encrypt_data(input_data, password, "utf-8")
     assert isinstance(result, BytesIO)

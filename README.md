@@ -7,7 +7,7 @@
 
 ## Overview
 
-This module provides a convenient interface for handling the environment, and therefore configuration of any application using 12factor.net principals removing many environment-specific variables and security-sensitive information from application code.
+This module provides a convenient interface for handling the environment, and therefore configuration of any application using 12factor.net principles removing many environment-specific variables and security-sensitive information from application code.
 
 An `Env` instance delivers a lot of functionality by providing a type-smart front-end to `os.environ`, providing a superset of `os.environ` functionality, including setting default values.
 
@@ -20,7 +20,7 @@ Hashicorp vault functionality is optional, activated automatically when the `hva
 Values fetched from Vault are cached by default to reduce the overhead of the api call.
 If this is of concern to security, caching can be disabled using the`enable_cache=False` parameter to Env.
 
-This module provides man y features not supported by other dotenv handlers (python-dotenv, etc.) including recursive
+This module provides many features not supported by other dotenv handlers (python-dotenv, etc.) including recursive
 expansion of template variables, supporting the don't-repeat-yourself (DRY) principle.
 
 ```python
