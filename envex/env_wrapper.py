@@ -5,11 +5,13 @@ Type smart wrapper around os.environ
 
 import contextlib
 import re
+from pathlib import Path
+from io import TextIOBase, BytesIO
 from typing import Any, List, MutableMapping, Type
 
 from envex.env_hvac import SecretsManager
 
-from .dot_env import load_env, unquote
+from .dot_env import load_env, unquote, load_stream, update_env
 
 
 class Env:
@@ -44,6 +46,9 @@ class Env:
         @param environ: dict | None default base environment (os.environ is default)
         @param exception: (optional) Exception class to raise on error (default=KeyError)
         @param readenv: read values from .env files (default=False)
+        @param decrypt: attempt decryption if password is used
+        @param encoding: text encoding
+        @param password: password to use for decryption
             - if readenv=True, the following additional args may be used
             @param env_file: str name of the environment file (.env or $ENV default)
             @param search_path: None | Union[List[str], List[Path]], str] path(s) to search for env_file
@@ -64,12 +69,35 @@ class Env:
         @param kwargs: (optional) environment variables to add/override
         """
         self._env = self.os_env() if environ is None else environ
-        self._env.update(args)
+
+        streams = []
+        for arg in args:
+            if isinstance(arg, dict):
+                update_env(self._env, arg)
+            elif isinstance(arg, (BytesIO, TextIOBase)):
+                streams.append(arg)
+
+        if "streams" in kwargs and isinstance(kwargs["streams"], (tuple, list)):
+            streams.extend(kwargs.pop("streams"))
+
+        password = kwargs.get("password")
+        if kwargs.get("decrypt", False) and password:
+            if password[0] == "$":  # use environment variable (pre-.env)
+                password = self._env.pop(password[1:], None)  # also remove it
+            elif password[0] == "/":  # read a file
+                pw_file = Path(password[1:])
+                password = pw_file.read_text().rstrip() if pw_file.exists() else None
+        if not password:
+            kwargs["decrypt"] = False
+        else:
+            kwargs["password"] = password
+
+        kwargs.setdefault("environ", self._env)
         if readenv:
             self.read_env(**kwargs)
-        else:
-            self._env.update({k: v for k, v in kwargs.items() if isinstance(v, str)})
+        self.read_streams(*streams, **kwargs)
         self.env_source = self.env.get("ENVEX_SOURCE", "env") == "env"
+        self.exception = exception or self._EXCEPTION_CLS
         self.secret_manager = SecretsManager(
             url=url,
             token=token,
@@ -82,7 +110,6 @@ class Env:
             mount_point=mount_point,
             timeout=kwargs.get("timeout", None),
         )
-        self.exception = exception or self._EXCEPTION_CLS
 
     @staticmethod
     def os_env():
@@ -99,10 +126,23 @@ class Env:
             parents: bool
             update: bool
             errors: bool
+            decrypt: bool
+            password: str
+            encoding: str
         kwargs: MutableMapping[str, str]
         """
-        kwargs.setdefault("environ", self._env)
         self._env = load_env(**kwargs)
+
+    def read_streams(self, *streams, **kwargs):
+        environ = kwargs["environ"]
+        # default overwrite is different for streams
+        overwrite = kwargs.get("overwrite", True)
+        errors = kwargs.get("errors", False)
+        decrypt = kwargs.get("decrypt", True)
+        password = kwargs.get("password", None)
+        encoding = kwargs.get("encoding", "utf-8")
+        for stream in streams:
+            load_stream(stream, environ, overwrite, errors, decrypt, password, encoding)
 
     @property
     def exception(self) -> Type[Exception]:
@@ -117,7 +157,7 @@ class Env:
         return self._env
 
     def get(self, var: str, default=None):
-        # getting from environment is cheapest
+        # getting from the environment is the least expensive
         value = self.env.get(var, None)
         # not set or isn't primary, check secrets manager
         if value is None or not self.env_source:

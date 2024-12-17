@@ -5,6 +5,7 @@ import io
 import pytest
 
 import envex
+from envex.env_crypto import encrypt_data
 
 TEST_ENV = [
     "# This is an example .env file",
@@ -20,17 +21,48 @@ TEST_ENV = [
     "ALISTOFIPS=::1,127.0.0.1,mydomain.com",
 ]
 
+TEST_ENV_STREAM = io.BytesIO("\n".join(TEST_ENV).encode("utf-8"))
+
+
+@pytest.fixture
+def password():
+    return "ajf4vDFa_849&s"
+
 
 @contextlib.contextmanager
-def dotenv(ignored):
-    _ = ignored
-    yield io.StringIO("\n".join(TEST_ENV))
+def dotenv(_ignored):
+    TEST_ENV_STREAM.seek(0)
+    yield TEST_ENV_STREAM
 
 
 def test_env_wrapper():
     env = envex.Env()
     assert "HOME" in env
     assert "USER" in env
+
+
+def test_env_wrapper_dict():
+    values = dict(TEST="one", ARG2="two", ENABLED=3)
+    env = envex.Env(values, environ={})
+    assert env("TEST") == "one"
+    assert env("ARG2") == "two"
+    assert env("ENABLED") == "3"
+
+
+def test_env_wrapper_stream_bytes():
+    stream = io.BytesIO(b"ONE=1\nARG2=two\nENABLED=true\n")
+    env = envex.Env(stream, environ={})
+    assert env("ONE") == "1"
+    assert env("ARG2") == "two"
+    assert env("ENABLED") == "true"
+
+
+def test_env_wrapper_stream_text():
+    stream = io.StringIO("ONE=one\nARG2=2\nENABLED=false\n")
+    env = envex.Env(stream, environ={})
+    assert env("ONE") == "one"
+    assert env("ARG2") == "2"
+    assert env("ENABLED") == "false"
 
 
 def test_env_get():
@@ -184,21 +216,22 @@ def test_env_export():
     values = dict(MYVARIABLE="somevalue", MYVARIABLE2=1, MYVARIABLE3="...")
 
     env.export(values)
+    # sourcery skip: no-loop-in-tests
     for k, v in values.items():
         assert env[k] == str(v)
-    assert env.is_all_set([k for k in values.keys()])
+    assert env.is_all_set(list(values.keys()))
     assert not env.is_all_set("NOTSETVAR")
-    env.export({k: None for k in values.keys()})
-    assert not env.is_any_set([k for k in values.keys()])
+    env.export({k: None for k in values})
+    assert not env.is_any_set(list(values.keys()))
     env["NOT_MYVARIABLE"] = "somevalue"
     assert env.is_any_set("NOT_MYVARIABLE")
 
     env.export(**values)
     for k, v in values.items():
         assert env[k] == str(v)
-    assert env.is_all_set([k for k in values.keys()])
-    env.export({k: None for k in values.keys()})
-    assert not env.is_any_set([k for k in values.keys()])
+    assert env.is_all_set(list(values.keys()))
+    env.export({k: None for k in values})
+    assert not env.is_any_set(list(values.keys()))
 
     import os
 
@@ -262,3 +295,33 @@ def test_setdefault_exists():
     result = env.setdefault("var3", "def")
     assert result == "abc"
     assert env.env["var3"] == "abc"
+
+
+def test_encrypted_stream_bytes(password):
+    data = b"ONE=1\nARG2=two\nENABLED=true\n"
+    stream = encrypt_data(io.BytesIO(data), password)
+    env = envex.Env(stream, decrypt=True, password=password)
+    assert env("ONE") == "1"
+    assert env("ARG2") == "two"
+    assert env("ENABLED") == "true"
+
+
+def test_encrypted_stream_text(password):
+    data = "ONE=one\nARG2=2\nENABLED=false\n"
+    stream = encrypt_data(io.StringIO(data), password)
+    env = envex.Env(stream, decrypt=True, password=password)
+    assert env("ONE") == "one"
+    assert env("ARG2") == "2"
+    assert env("ENABLED") == "false"
+
+
+def test_encrypted_stream_bytes_env(password):
+    import os
+
+    os.environ["TEST_PASSWORD"] = password
+    data = b"ONE=1\nARG2=two\nENABLED=true\n"
+    stream = encrypt_data(io.BytesIO(data), password)
+    env = envex.Env(stream, decrypt=True, password="$TEST_PASSWORD")
+    assert env("ONE") == "1"
+    assert env("ARG2") == "two"
+    assert env("ENABLED") == "true"

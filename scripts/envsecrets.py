@@ -9,6 +9,7 @@ Input:
 Output:
 
 """
+
 import argparse
 import re
 import sys
@@ -62,7 +63,12 @@ def cache_regex(rx: str) -> re.Pattern:
 def env_match(var, regexlist, is_value=False):
     if regexlist:
         for regex in regexlist:
-            if is_value and var == regex or not is_value and cache_regex(regex).match(var):
+            if (
+                is_value
+                and var == regex
+                or not is_value
+                and cache_regex(regex).match(var)
+            ):
                 break
         else:
             return False

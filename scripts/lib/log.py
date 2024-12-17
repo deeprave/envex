@@ -19,8 +19,8 @@ logging.fatal = fatal
 
 
 def config(**kwargs):
-    kwargs.setdefault("level", logging.INFO),
-    kwargs.setdefault("format", "%(asctime)s %(message)s (%(levelname)s)"),
+    (kwargs.setdefault("level", logging.INFO),)
+    (kwargs.setdefault("format", "%(asctime)s %(message)s (%(levelname)s)"),)
     logging.basicConfig(**kwargs)
 
 
