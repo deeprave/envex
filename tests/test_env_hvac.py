@@ -37,7 +37,9 @@ def mock_init_client():
             self.secrets.pop(path, None)
 
         def sys(self):
-            return MagicMock(list_mounted_secrets_engines=MagicMock(return_value={"data": {}}))
+            return MagicMock(
+                list_mounted_secrets_engines=MagicMock(return_value={"data": {}})
+            )
 
     with patch("hvac.Client", new=MockClient):
         yield MockClient()
@@ -91,6 +93,7 @@ test_params = [
 ]
 
 
+@pytest.mark.vault
 @pytest.mark.parametrize(
     "url, token, cert, verify, base_path, engine, mount_point, expected_base_path",
     test_params,
@@ -134,7 +137,9 @@ def secrets_manager():
 
         def read(self, path):
             mock_responses = {
-                "secret/data/valid/path": {"data": {"data": {"secret_key": "secret_value"}}},
+                "secret/data/valid/path": {
+                    "data": {"data": {"secret_key": "secret_value"}}
+                },
                 "secret/data/valid/empty": {"data": {"data": {}}},
                 "secret/data/no/data": {},
                 None: None,
@@ -182,6 +187,7 @@ def secrets_manager():
 
 
 # Parametrized test cases
+@pytest.mark.vault
 @pytest.mark.parametrize(
     "test_input, test_input_key, expected_output, test_id",
     [
@@ -200,12 +206,16 @@ def secrets_manager():
         (None, None, {}, "error_case_none_path"),
     ],
 )
-def test_get_secrets(secrets_manager, test_input, test_input_key, expected_output, test_id):
+def test_get_secrets(
+    secrets_manager, test_input, test_input_key, expected_output, test_id
+):
     # Act
     result = secrets_manager.get_secrets(test_input)
 
     # Assert
-    assert result == expected_output, f"get_secrets({test_input}) failed for test_id: {test_id}"
+    assert (
+        result == expected_output
+    ), f"get_secrets({test_input}) failed for test_id: {test_id}"
 
     # Act
     result = secrets_manager.get_secret(test_input_key)
@@ -221,6 +231,7 @@ def test_get_secrets(secrets_manager, test_input, test_input_key, expected_outpu
     assert secrets_manager.secrets == {}
 
 
+@pytest.mark.vault
 @pytest.mark.parametrize(
     "test_input_key, expected_inital_output, modified_value, test_id",
     [
@@ -239,25 +250,34 @@ def test_get_secrets(secrets_manager, test_input, test_input_key, expected_outpu
         (None, None, None, "error_case_none_path"),
     ],
 )
-def test_get_set_secret(secrets_manager, test_input_key, expected_inital_output, modified_value, test_id):
+def test_get_set_secret(
+    secrets_manager, test_input_key, expected_inital_output, modified_value, test_id
+):
     result = secrets_manager.get_secret(test_input_key)
-    assert result == expected_inital_output, f"get_secret({test_input_key}) failed for test_id: {test_id}"
+    assert (
+        result == expected_inital_output
+    ), f"get_secret({test_input_key}) failed for test_id: {test_id}"
 
     secrets_manager.set_secret(test_input_key, modified_value)
     result = secrets_manager.get_secret(test_input_key)
-    assert result == modified_value, f"get_secret({test_input_key}) failed for test_id: {test_id}"
+    assert (
+        result == modified_value
+    ), f"get_secret({test_input_key}) failed for test_id: {test_id}"
 
     result = list(secrets_manager.list_secrets())
     expected_result = [test_input_key] if modified_value else []
     assert result == expected_result, f"list_secrets() failed for test_id: {test_id}"
 
     secrets_manager.delete_secret(test_input_key)
-    assert secrets_manager.secrets == {}, f"delete_secret({test_input_key}) failed for test_id: {test_id}"
+    assert (
+        secrets_manager.secrets == {}
+    ), f"delete_secret({test_input_key}) failed for test_id: {test_id}"
 
     result = list(secrets_manager.list_secrets())
     assert not result
 
 
+@pytest.mark.vault
 def test_seal_unseal(secrets_manager):
     secrets_manager.seal()
     assert secrets_manager.sealed

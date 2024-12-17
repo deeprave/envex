@@ -2,24 +2,37 @@
 import os
 import sys
 import contextlib
+from io import TextIOBase, BytesIO
 from pathlib import Path
 from string import Template
-from typing import List, MutableMapping, Union
+from typing import Dict, List, MutableMapping, Union, Optional, ContextManager, BinaryIO
+
+from .env_crypto import decrypt_data, DecryptError
 
 __all__ = (
     "load_env",
+    "load_stream",
     "load_dotenv",  # alias
+    "update_env",
     "unquote",
 )
 
+
 DEFAULT_ENVKEY = "DOTENV"
 DEFAULT_DOTENV = ".env"
+ENCRYPTED_EXT = ".enc"
+DEFAULT_ENCODING = "utf-8"
 
 
 def unquote(line, quotes="\"'"):
     if line and line[0] in quotes and line[-1] == line[0]:
         line = line[1:-1]
     return line
+
+
+def update_env(env: MutableMapping[str, str], mapping: Dict):
+    for k, v in mapping.items():
+        env[str(k)] = str(v)
 
 
 def _env_default(
@@ -38,26 +51,38 @@ def _env_export(
 
 
 def _env_files(
-    env_file: str, search_path: List[Path], parents: bool, errors: bool
+    env_file: str, search_path: List[Path], parents: bool, decrypt: bool, errors: bool
 ) -> List[str]:
     """expand env_file with the full search path, optionally parents as well"""
-
     searched = []
+
+    def search_dotpath(base: Path, name: str):
+        _path = os.path.join(base, name)
+        return _path if os.access(_path, os.R_OK) else None
+
     for path in search_path:
         path = path.resolve()
         if not path.is_dir():
             path = path.parent
         searched.append(path)
         paths = [path] + list(path.parents)
+
         # search a path and parents
         for sub_path in paths:
-            # stop at first found, or ...
-            # fail fast unless searching parents
-            env_path = os.path.join(sub_path, env_file)
-            if os.access(env_path, os.R_OK):
+            # if decryption is enabled, encrypted .env.enc files take priority
+            env_path = (
+                search_dotpath(sub_path, env_file + ENCRYPTED_EXT) if decrypt else None
+            )
+            if env_path:
                 yield env_path
-            elif not parents:
-                break
+            else:
+                # but allow fallback to standard .env
+                env_path = search_dotpath(sub_path, env_file)
+                if env_path:
+                    yield env_path
+                # quit search unless we are searching up
+                elif not parents:
+                    break
     if errors:
         raise FileNotFoundError(f"{env_file} in {[s.as_posix() for s in searched]}")
     else:
@@ -65,9 +90,9 @@ def _env_files(
 
 
 @contextlib.contextmanager
-def open_env(path: Union[str, Path]):
+def open_env(path: Union[str, Path]) -> ContextManager[BinaryIO]:
     """same as open, allow monkeypatch"""
-    fp = open(path, "r")
+    fp = open(path, "rb")
     try:
         yield fp
     finally:
@@ -79,6 +104,41 @@ ENV_COMMANDS = {
 }
 
 
+def _process_line(_lineno: int, string: str, errors: bool, _env_path: Path | None):
+    """process a single line"""
+    _func, _key, _val = _env_default, None, None
+    parts = string.split("=", 1)
+    if len(parts) == 2:
+        _key, _val = parts
+    elif len(parts) == 1:
+        _key = parts[0]
+    if _key:
+        words = _key.split(maxsplit=1)
+        if len(words) > 1:
+            command, _key = words
+            try:
+                _func = ENV_COMMANDS[command]
+            except KeyError:
+                if errors:
+                    path = _env_path.as_posix() if _env_path else "stream"
+                    print(
+                        f"unknown command {command} {path}({_lineno})",
+                        file=sys.stderr,
+                    )
+    return _func, unquote(_key), unquote(_val)
+
+
+def _process_stream(
+    stream: BytesIO, environ, overwrite, errors, encoding=DEFAULT_ENCODING, env_path=None
+):
+    for lineno, line in enumerate(stream.readlines(), start=1):
+        line = line.decode(encoding).strip()
+        if line and line[0] != "#":
+            func, key, val = _process_line(lineno, line, errors, env_path)
+            if func is not None:
+                func(environ, key, val, overwrite=overwrite)
+
+
 def _process_env(
     env_file: str,
     search_path: List[Path],
@@ -87,6 +147,9 @@ def _process_env(
     parents: bool,
     errors: bool,
     working_dirs: bool,
+    decrypt: bool,
+    password: Optional[str] = None,
+    encoding: str = DEFAULT_ENCODING,
 ) -> MutableMapping[str, str]:
     """
     search for any env_files in the given dir list and populate environ dict
@@ -96,50 +159,32 @@ def _process_env(
     :param environ: environment to update
     :param overwrite: whether to overwrite existing values
     :param parents: whether to search upwards until a file is found
+    :param decrypt: whether to attempt decryption
     :param errors: whether to raise FileNotFoundError if the env_file is not found
     :param working_dirs: whether to add the env file's directory
+    :param encoding: text encoding
     """
-
-    def process_line(_env_path: Path, _lineno: int, string: str):
-        """process a single line"""
-        _func, _key, _val = _env_default, None, None
-        parts = string.split("=", 1)
-        if len(parts) == 2:
-            _key, _val = parts
-        elif len(parts) == 1:
-            _key = parts[0]
-        if _key:
-            words = _key.split(maxsplit=1)
-            if len(words) > 1:
-                command, _key = words
-                try:
-                    _func = ENV_COMMANDS[command]
-                except KeyError:
-                    if errors:
-                        print(
-                            f"unknown command {command} {_env_path.as_posix()}({_lineno})",
-                            file=sys.stderr,
-                        )
-        return _func, unquote(_key), unquote(_val)
 
     files_not_found = []
     files_found = False
-    for env_path in _env_files(env_file, search_path, parents, errors):
+    for env_path in _env_files(env_file, search_path, parents, decrypt, errors):
         # insert PWD as container of env file
         env_path = Path(env_path).resolve()
         if working_dirs:
             environ["PWD"] = str(env_path.parent)
         try:
             with open_env(env_path) as f:
-                lineno = 0
-                for line in f.readlines():
-                    line = line.strip()
-                    lineno += 1
-                    if line and line[0] != "#":
-                        func, key, val = process_line(env_path, lineno, line)
-                        if func is not None:
-                            func(environ, key, val, overwrite=overwrite)
-                files_found = True
+                load_stream(
+                    BytesIO(f.read()),
+                    environ,
+                    overwrite,
+                    errors,
+                    decrypt,
+                    password,
+                    encoding,
+                    env_path,
+                )
+            files_found = True
         except FileNotFoundError:
             files_not_found.append(env_path)
     if errors and not files_found and files_not_found:
@@ -180,17 +225,23 @@ def load_env(
     update: bool = True,
     errors: bool = False,
     working_dirs: bool = True,
+    decrypt: bool = False,
+    password: str = None,
+    encoding: Optional[str] = DEFAULT_ENCODING,
 ) -> MutableMapping[str, str]:
     """
     Loads one or more .env files with optional nesting, updating os.environ
     :param env_file: name of the environment file (.env or $ENV default)
     :param search_path: single or list of directories in order of precedence - str, bytes or Path
+    :param environ: environment mapping to process
     :param overwrite: whether to overwrite existing values
     :param parents: whether to search upwards until a file is found
     :param update: option to update os.environ, default=True
     :param errors: whether to raise FileNotFoundError if env_file not found
     :param working_dirs: whether to add the env file's directory
-    :param environ: environment mapping to process
+    :param decrypt: whether to support encrypted .env.enc
+    :param password: decryption password
+    :param encoding: text encoding (default utf-8)
     :returns the new environment
     """
     if environ is None:
@@ -229,10 +280,32 @@ def load_env(
             parents,
             errors,
             working_dirs,
+            decrypt,
+            password,
+            encoding,
         )
     )
     # optionally update the actual environment
     return _update_os_env(environ) if update else environ
+
+
+def load_stream(
+    stream: Union[BytesIO, TextIOBase],
+    environ: MutableMapping[str, str] = None,
+    overwrite: bool = False,
+    errors: bool = False,
+    decrypt: bool = False,
+    password: Optional[str] = None,
+    encoding: Optional[str] = DEFAULT_ENCODING,
+    env_path: Optional[Path] = None,
+):
+    if isinstance(stream, TextIOBase):
+        stream.seek(0)
+        stream = BytesIO(stream.read().encode(encoding))
+    elif password and decrypt:
+        with contextlib.suppress(DecryptError):
+            stream = decrypt_data(stream, password)
+    _process_stream(stream, environ, overwrite, errors, encoding, env_path)
 
 
 load_dotenv = load_env

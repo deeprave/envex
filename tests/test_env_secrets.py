@@ -5,7 +5,12 @@ from envex import Env
 
 @pytest.mark.integration
 def test_vault_secrets(vault):
-    env = Env(url=vault.get_connection_url(), base_path="test", token=vault.root_token, engine="kv")
+    env = Env(
+        url=vault.get_connection_url(),
+        base_path="test",
+        token=vault.root_token,
+        engine="kv",
+    )
     assert env is not None
     assert env.secret_manager is not None
     assert env.secret_manager.client is not None

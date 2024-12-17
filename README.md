@@ -7,23 +7,21 @@
 
 ## Overview
 
-This module provides a convenient interface for handling the environment, and therefore configuration of any application
-using 12factor.net principals removing many environment-specific variables and security sensitive information from
-application code.
+This module provides a convenient interface for handling the environment, and therefore configuration of any application using 12factor.net principals removing many environment-specific variables and security-sensitive information from application code.
 
-An `Env` instance delivers a lot of functionality by providing a type-smart front-end to `os.environ`,
-providing a superset of `os.environ` functionality, including setting default values.
+An `Env` instance delivers a lot of functionality by providing a type-smart front-end to `os.environ`, providing a superset of `os.environ` functionality, including setting default values.
 
-From version 2.0, this module also supports transparently fetching values from Hashicorp vault,
-which reduces the need to store secrets in plain text on the filesystem.
-This functionality is optional, activated automatically when the `hvac` module is installed, and connection and
-authentication to Vault succeed.
-Only get (no set) operations to Vault are supported.
+`envex` supports AES-256 encrypted environment files, and if enabled by using the `decrypt=True` argument and providing the decryption password searches for `.env.enc` files first but falls back to `.env`.
+This avoids having plain text files on the filesystem that contain sensitive information.
+The provided `env_crypto` utility allows conversion between encrypted and non-encrypted formats.
+
+Alternatively, `envex` handles transparently fetching values from Hashicorp vault, reducing the need to store secrets in plain text on the filesystem and depending on the environment may present a more convenient way of managing application secrets.
+Hashicorp vault functionality is optional, activated automatically when the `hvac` module is installed into the active virtual environment, and connection and authentication to Vault succeed.
 Values fetched from Vault are cached by default to reduce the overhead of the api call.
-If this is of concern to security, caching can be disabled using the `enable_cache=False` parameter to Env.
+If this is of concern to security, caching can be disabled using the`enable_cache=False` parameter to Env.
 
-This module provides some features not supported by other dotenv handlers (python-dotenv, etc.) including recursive
-expansion of template variables, which can be very useful for DRY.
+This module provides man y features not supported by other dotenv handlers (python-dotenv, etc.) including recursive
+expansion of template variables, supporting the don't-repeat-yourself (DRY) principle.
 
 ```python
 from envex import env
@@ -148,11 +146,12 @@ The SecretsManager and Vault client leverage environment variables for their con
 This ensures a degree of transparency as it allows the client to use them but mitigates the need for the client code to be aware of their presence.
 A summary of these variables is in the following table:
 
-| Variable          | Description                                                              |
-|-------------------|--------------------------------------------------------------------------|
-| VAULT_ADDR        | The URL of the vault server                                              |
-| VAULT_TOKEN       | The vault token to use for authentication                                |
-| VAULT_CACERT      | The path to the CA certificate to use for TLS verification               |
-| VAULT_CAPATH      | The path to a directory of CA certificates to use for TLS verification   |
-| VAULT_CLIENT_CERT | The path to the client certificate to use for TLS connection             |
-| VAULT_CLIENT_KEY  | The path to the client key to use for TLS connection                     |
+
+| Variable          | Description                                                            |
+| ----------------- | ---------------------------------------------------------------------- |
+| VAULT_ADDR        | The URL of the vault server                                            |
+| VAULT_TOKEN       | The vault token to use for authentication                              |
+| VAULT_CACERT      | The path to the CA certificate to use for TLS verification             |
+| VAULT_CAPATH      | The path to a directory of CA certificates to use for TLS verification |
+| VAULT_CLIENT_CERT | The path to the client certificate to use for TLS connection           |
+| VAULT_CLIENT_KEY  | The path to the client key to use for TLS connection                   |

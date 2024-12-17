@@ -1,23 +1,31 @@
 [project]
 name = "envex"
-version = "3.3.1"
-description = "Environment interface with .env and hashicorp vault support"
+version = "4.0.0"
+description = "Environment interface with (optionally encrypted) .env with hashicorp vault support"
 readme = "README.md"
 license = { file = "LICENSE.md" }
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "David Nugent", email = "davidn@uniquode.io" }
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
 ]
-scripts = {env2hvac = "scripts.env2hvac:main", envsecrets = "scripts.envsecrets:main", seal = "scripts.seal:main"}
+scripts = {envcrypt = "scripts.envcrypt:main", env2hvac = "scripts.env2hvac:main", envsecrets = "scripts.envsecrets:main", seal = "scripts.seal:main"}
+
+[project.urls]
+homepage = "https://github.com/deeprave/envex"
+repository = "https://github.com/deeprave/envex"
 
 [tool.ruff]
 namespace-packages = ["envex"]
 
 [tool.pytest.ini_options]
-minversion = "7.0"
+minversion = "8.0"
 markers = "integration: mark a test as an integration test"
 addopts = "-m 'not integration'"
 pythonpath = ["."]
@@ -28,9 +36,18 @@ dev = [
     "pytest-cov>=4.1,<7.0",
     "pytest-mock>=3.11.1",
     "pytest>=7.0",
-    "ruff>=0.4.4",
     "testcontainers>=4.4.0",
 ]
 vault = [
     "hvac>=1.1.1",
 ]
+crypto = [
+    "pycryptodome>=3.21.0",
+]
+
+[tool.uv]
+default-groups = ["dev", "crypto"]
+
+[build-system]
+requires = ["flit-core"]
+build-backend = "flit_core.buildapi"

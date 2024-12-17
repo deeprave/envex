@@ -3,5 +3,8 @@
   <component name="Black">
     <option name="sdkName" value="Poetry (envex)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.12 (envex)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.13 virtualenv at ~/.config/venvs/envex-65054036" project-jdk-type="Python SDK" />
+  <component name="TaskProjectConfiguration">
+    <server type="YouTrack" url="https://uniquode.youtrack.cloud" />
+  </component>
 </project>

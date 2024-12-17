@@ -3,6 +3,7 @@
 """
 Seal or [-u] unseal a vault
 """
+
 import logging
 import os
 import textwrap
@@ -39,7 +40,9 @@ def main():
         def _split_lines(self, text, width):
             return textwrap.wrap(text, width=250)
 
-    parser = argparse.ArgumentParser(description=description, formatter_class=CustomFormatter)
+    parser = argparse.ArgumentParser(
+        description=description, formatter_class=CustomFormatter
+    )
     parser.add_argument(
         "-a",
         "--address",
@@ -65,12 +68,18 @@ def main():
         help="Comma separated list of unseal keys",
     )
     action_group = parser.add_mutually_exclusive_group(required=False)
-    action_group.add_argument("-s", "--seal", action="store_true", default=False, help="Seal the vault")
-    action_group.add_argument("-u", "--unseal", action="store_true", default=False, help="Unseal the vault")
+    action_group.add_argument(
+        "-s", "--seal", action="store_true", default=False, help="Seal the vault"
+    )
+    action_group.add_argument(
+        "-u", "--unseal", action="store_true", default=False, help="Unseal the vault"
+    )
 
     args = parser.parse_args()
 
-    client = hvac.Client(url=args.address, token=args.token, verify=expand(args.cacert) or False)
+    client = hvac.Client(
+        url=args.address, token=args.token, verify=expand(args.cacert) or False
+    )
 
     try:
         if args.seal:

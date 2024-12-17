@@ -20,11 +20,11 @@ def envmap():
 @contextlib.contextmanager
 def dotenv(ignored):
     _ = ignored
-    yield io.StringIO(
-        """
+    yield io.BytesIO(
+        b"""
 # This is an example .env file
 SECOND=a-second-value
-THIRD=altnernative-third
+THIRD=alternative-third
 export FIFTH=fifth-value
 COMBINED=${FIRST}:${THIRD}:${FIFTH}
 DOUBLE_QUOTED="a quoted value"
@@ -48,7 +48,7 @@ def test_load_env_overwrite(monkeypatch, envmap):
     for var in envmap.keys():
         assert var in env
     assert "FIFTH" in env
-    assert env["COMBINED"] == "first-value:altnernative-third:fifth-value"
+    assert env["COMBINED"] == "first-value:alternative-third:fifth-value"
 
 
 def test_quoted_value(monkeypatch, envmap):
