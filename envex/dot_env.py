@@ -54,35 +54,31 @@ def _env_files(
     env_file: str, search_path: List[Path], parents: bool, decrypt: bool, errors: bool
 ) -> List[str]:
     """expand env_file with the full search path, optionally parents as well"""
+
+    def resolve_file(base_path: Path, name: str, _decrypt: bool) -> Optional[str]:
+        """Returns the path to the env file, prioritising the encrypted version if enabled"""
+        if _decrypt:
+            encrypted_path = os.path.join(base_path, name + ENCRYPTED_EXT)
+            if os.access(encrypted_path, os.R_OK):
+                return encrypted_path
+
+        standard_path = os.path.join(base_path, name)
+        return standard_path if os.access(standard_path, os.R_OK) else None
+
     searched = []
-
-    def search_dotpath(base: Path, name: str):
-        _path = os.path.join(base, name)
-        return _path if os.access(_path, os.R_OK) else None
-
     for path in search_path:
         path = path.resolve()
         if not path.is_dir():
             path = path.parent
         searched.append(path)
-        paths = [path] + list(path.parents)
 
-        # search a path and parents
-        for sub_path in paths:
-            # if decryption is enabled, encrypted .env.enc files take priority
-            env_path = (
-                search_dotpath(sub_path, env_file + ENCRYPTED_EXT) if decrypt else None
-            )
-            if env_path:
+        for sub_path in [path] + list(path.parents):
+            if env_path := resolve_file(sub_path, env_file, decrypt):
                 yield env_path
-            else:
-                # but allow fallback to standard .env
-                env_path = search_dotpath(sub_path, env_file)
-                if env_path:
-                    yield env_path
-                # quit search unless we are searching up
-                elif not parents:
-                    break
+                break
+            elif not parents:
+                break
+
     if errors:
         raise FileNotFoundError(f"{env_file} in {[s.as_posix() for s in searched]}")
     else:
@@ -164,11 +160,10 @@ def _process_env(
     :param working_dirs: whether to add the env file's directory
     :param encoding: text encoding
     """
-
     files_not_found = []
     files_found = False
     for env_path in _env_files(env_file, search_path, parents, decrypt, errors):
-        # insert PWD as container of env file
+        # insert PWD as container of the env file
         env_path = Path(env_path).resolve()
         if working_dirs:
             environ["PWD"] = str(env_path.parent)

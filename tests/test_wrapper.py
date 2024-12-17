@@ -338,6 +338,7 @@ def test_encrypted_stream_bytes2(password):
 
 def test_encrypted_stream_invalid_format(password):
     import os
+
     # Create an invalid encrypted format by using random bytes
     invalid_data = os.urandom(100)
 
