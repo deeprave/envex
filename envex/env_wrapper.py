@@ -77,6 +77,8 @@ class Env:
             elif isinstance(arg, (BytesIO, TextIOBase)):
                 streams.append(arg)
 
+        self.exception = exception or self._EXCEPTION_CLS
+
         if "streams" in kwargs and isinstance(kwargs["streams"], (tuple, list)):
             streams.extend(kwargs.pop("streams"))
 
@@ -86,7 +88,10 @@ class Env:
                 password = self._env.pop(password[1:], None)  # also remove it
             elif password[0] == "/":  # read a file
                 pw_file = Path(password[1:])
-                password = pw_file.read_text().rstrip() if pw_file.exists() else None
+                try:
+                    password = pw_file.read_text().rstrip()
+                except (IOError, PermissionError) as exc:
+                    raise self.exception(*exc.args) from exc
         if not password:
             kwargs["decrypt"] = False
         else:
@@ -97,7 +102,6 @@ class Env:
             self.read_env(**kwargs)
         self.read_streams(*streams, **kwargs)
         self.env_source = self.env.get("ENVEX_SOURCE", "env") == "env"
-        self.exception = exception or self._EXCEPTION_CLS
         self.secret_manager = SecretsManager(
             url=url,
             token=token,

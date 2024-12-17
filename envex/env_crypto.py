@@ -12,7 +12,7 @@ from typing import Union
 
 # Magic bytes to identify an encrypted files
 MAGIC_BYTES = b"SECF"  # "Secure Encrypted File"
-ITERATIONS = 4800000
+ITERATIONS = 1800000
 AES_KEY_LENGTH = 32  # max bytes for AES256
 
 logger = logging.getLogger(__file__)
