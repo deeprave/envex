@@ -1,6 +1,6 @@
 # tests/test_env_crypto.py
 
-from io import BytesIO
+from io import BytesIO, StringIO
 
 import pytest
 from envex.env_crypto import encrypt_data, decrypt_data, EncryptError, DecryptError
@@ -30,6 +30,17 @@ def test_encrypt_data_success(password):
     result = encrypt_data(input_data, password)
     assert isinstance(result, BytesIO)
     assert result.getvalue() != b"test data"  # Ensure data is encrypted
+
+@pytest.mark.unit
+def test_encrypt_decrypt_unicode_(password):
+    test_string = "\u00A9 test data \u06A2"
+    input_data = StringIO(test_string)
+    result = encrypt_data(input_data, password, "utf-8")
+    assert isinstance(result, BytesIO)
+    assert result.getvalue() != test_string
+    result = decrypt_data(result, password)
+    assert isinstance(result, BytesIO)
+    assert result.getvalue().decode("utf-8") == test_string
 
 
 @pytest.mark.unit
