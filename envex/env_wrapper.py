@@ -86,7 +86,7 @@ class Env:
         if kwargs.get("decrypt", False) and password:
             if password[0] == "$":  # use environment variable (pre-.env)
                 password = self._env.pop(password[1:], None)  # also remove it
-            elif password[0] == "/":  # read a file
+            elif password[0] == "@":  # read a file
                 pw_file = Path(password[1:])
                 try:
                     password = pw_file.read_text().rstrip()
