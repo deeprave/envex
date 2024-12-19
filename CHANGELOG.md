@@ -6,13 +6,12 @@
 - Bugfix: dicts passed in *args the Env() are now correctly converted to str->str mappings.
 - Feature: Env can now take BytesIO and StringIO objects in Env(*args). Since these are immediate objects, they are handled as priority variables, different to variables set via `.env` files in that they overwrite existing variables by default. Explicitly using the overwrite=False changes this behaviour.
 - Warning: To provide support for different types of streams, environment files are now handled internally as bytes. However, before evaluation they are converted via an encoding parameter that defaults to "utf-8".
-- Feature: Encrypted `.env` files (`.env.enc`) are now supported. You no longer need to implement a Hashicorp Vault in order to avoid having plain text secrets on the filesystem, you can simply encrypt the `.env` file directly]. Use the `decrypt=True` parameter and provide the encryption pass phrased used to derive the key:
+- Feature: Encrypted `.env` files (`.env.enc`) are now supported. You no longer need to implement a Hashicorp Vault in order to avoid having plain text secrets on the filesystem, you can simply encrypt the `.env` file directly. Use the `decrypt=True` parameter and provide the encryption pass phrase used to derive the key:
 
-  - `password=<password_value>`
+  - `password=<pass-phrase>`
   - `password=$<environment_variable_name>`
   - `password=/<filename to read>`
--
-- If `decrypt=True` is used with a pass phrase (see previous item) `envex` will look for `.env.enc` (or more correctly `${DOTENV:-.env}.enc`) and use that if it exists. Regardless, encryped content is supported in both `.env` and `.env.enc` files, but the `.enc` file is used in preference. Encrypted files have a special initial 4-byte signature that distinguishes them from unencrypted files.
+-  Feature: Encrypted `.env` files (`.env.enc`) are now supported. You no longer need to implement a Hashicorp Vault in order to avoid having plain text secrets on the filesystem, you can simply encrypt the `.env` file directly. Use the `decrypt=True` parameter and provide the password used to derive the key.
 - A utility cli script `envcrypt` is provided to support both encryption and decryption. Use `envcrypt -h` for usage.
 
 ### v3.2.0
