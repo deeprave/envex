@@ -130,6 +130,9 @@ def main():
     if not (_password := args.password):
         if args.environ:
             _password = os.environ.get(args.environ)
+            if not _password:
+                logger.error(f"{parser.prog}: {args.environ} is not set or is empty")
+                exit(2)
         elif args.file:
             _password = Path(args.file).read_text()
         elif sys.stdin.isatty():
