@@ -18,6 +18,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname).3s %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     level=logging.INFO,
+    force=True,
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__file__)
@@ -77,6 +78,7 @@ def main():
             kwargs["width"] = 1000
             super().__init__(*args, **kwargs)
 
+
     parser = CustomParser(description=__doc__, formatter_class=CustomHelpFormatter)
     password_opts = parser.add_mutually_exclusive_group()
     password_opts.add_argument(
@@ -130,6 +132,10 @@ def main():
             _password = os.environ.get(args.environ)
         elif args.file:
             _password = Path(args.file).read_text()
+        elif sys.stdin.isatty():
+            import getpass
+
+            _password = getpass.getpass(f"{parser.prog}: Enter passphrase: ")
         else:
             logger.error(f"{parser.prog}: password or password source is not provided")
             exit(2)
