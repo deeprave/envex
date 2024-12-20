@@ -24,7 +24,6 @@ def encrypted_stream_with_invalid_magic_bytes():
     return BytesIO(b"DATA_WITH_INVALID_MAGIC_BYTES")
 
 
-@pytest.mark.unit
 def test_encrypt_data_success(password):
     input_data = BytesIO(b"test data")
     result = encrypt_data(input_data, password)
@@ -32,7 +31,6 @@ def test_encrypt_data_success(password):
     assert result.getvalue() != b"test data"  # Ensure data is encrypted
 
 
-@pytest.mark.unit
 def test_encrypt_decrypt_unicode_(password):
     test_string = "\u00a9 test data \u06a2"
     input_data = StringIO(test_string)
@@ -44,7 +42,6 @@ def test_encrypt_decrypt_unicode_(password):
     assert result.getvalue().decode("utf-8") == test_string
 
 
-@pytest.mark.unit
 def test_encrypt_data_no_password():
     input_data = BytesIO(b"test data")
     password = ""
@@ -52,7 +49,6 @@ def test_encrypt_data_no_password():
         encrypt_data(input_data, password)
 
 
-@pytest.mark.unit
 def test_encrypt_data_already_encrypted(password):
     input_data = BytesIO(b"Some Test data data")
     input_enc = encrypt_data(input_data, password)
@@ -60,7 +56,6 @@ def test_encrypt_data_already_encrypted(password):
         encrypt_data(input_enc, password)
 
 
-@pytest.mark.unit
 def test_encrypt_empty_data():
     input_data = BytesIO(b"")
     password = "strongpassword123"
@@ -77,7 +72,6 @@ def test_encrypt_large_data(password):
     assert input_data.getvalue() == decrypt_data(result, password).getvalue()
 
 
-@pytest.mark.unit
 def test_valid_decryption(password):
     encrypted_stream = encrypt_data(BytesIO(b"VALID_ENCRYPTED_DATA"), password)
     result = decrypt_data(encrypted_stream, password)
@@ -85,7 +79,6 @@ def test_valid_decryption(password):
     assert result.getvalue() == b"VALID_ENCRYPTED_DATA"
 
 
-@pytest.mark.unit
 def test_invalid_magic_bytes(encrypted_stream_with_invalid_magic_bytes, password):
     # Ensure decryption fails on invalid magic bytes
     with pytest.raises(DecryptError) as e:
@@ -93,7 +86,6 @@ def test_invalid_magic_bytes(encrypted_stream_with_invalid_magic_bytes, password
     assert "does not look to be encrypted" in str(e.value)
 
 
-@pytest.mark.unit
 def test_invalid_password(incorrect_password, password):
     data = b"VALID_ENCRYPTED_DATA"
     encrypted_data = encrypt_data(BytesIO(data), password)
@@ -103,7 +95,6 @@ def test_invalid_password(incorrect_password, password):
     assert "Incorrect password or invalid data" in str(e.value)
 
 
-@pytest.mark.unit
 def test_empty_stream(password):
     # Test with an empty BytesIO stream
     empty_stream = BytesIO()
