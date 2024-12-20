@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Block data encryption using
+File encrypt/decrypt (AES-256-CBC with HMAC-SHA256)
 """
 
 import os
