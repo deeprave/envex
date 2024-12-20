@@ -58,19 +58,29 @@ def main():
 
     class CustomParser(argparse.ArgumentParser):
         def error(self, message):
-            logger.error(f"{self.prog}: error: {message}")
-            super().error()
+            if message:
+                logger.error(f"{self.prog}: error: {message}")
+            self.print_usage(sys.stderr)
+            self.exit(2)
+
+        def print_usage(self, file = None):
+            text = io.StringIO()
+            self._print_message(self.format_usage(), text)
+            self.print_text(text)
+
+        def print_text(self, text):
+            text.seek(0)
+            for line in text.readlines():
+                logger.info(line.strip())
 
         def warning(self, message):
-            logger.warning(f"{self.prog}: error: {message}")
-            super().warning()
+            if message:
+                logger.warning(f"{self.prog}: error: {message}")
 
         def print_help(self, file=None):
             text = io.StringIO()
             super().print_help(file=text)
-            text.seek(0)
-            for line in text.readlines():
-                logger.info(line.strip())
+            self.print_text(text)
 
     class CustomHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
         def __init__(self, *args, **kwargs):
