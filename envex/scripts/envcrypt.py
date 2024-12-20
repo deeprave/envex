@@ -75,7 +75,7 @@ def main():
 
         def warning(self, message):
             if message:
-                logger.warning(f"{self.prog}: error: {message}")
+                logger.warning(f"{self.prog}: warning: {message}")
 
         def print_help(self, file=None):
             text = io.StringIO()
