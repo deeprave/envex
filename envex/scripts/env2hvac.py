@@ -81,9 +81,9 @@ def handler(
 def main():
     import argparse
 
-    from scripts.lib.decr_action import Decrement
-    from scripts.lib.log import config as log_config
-    from scripts.lib.log import log_get_level, log_set_level
+    from envex.scripts.lib.decr_action import Decrement
+    from envex.scripts.lib.log import config as log_config
+    from envex.scripts.lib.log import log_get_level, log_set_level
 
     log_config()
 

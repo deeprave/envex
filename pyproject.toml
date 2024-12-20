@@ -15,7 +15,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3 :: Only",
 ]
-scripts = {envcrypt = "scripts.envcrypt:main", env2hvac = "scripts.env2hvac:main", envsecrets = "scripts.envsecrets:main", seal = "scripts.seal:main"}
+scripts = {envcrypt = "envex.scripts.envcrypt:main", env2hvac = "envex.scripts.env2hvac:main", envsecrets = "envex.scripts.envsecrets:main", seal = "envex.scripts.seal:main"}
 
 [project.urls]
 homepage = "https://github.com/deeprave/envex"

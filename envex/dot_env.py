@@ -169,8 +169,11 @@ def _process_env(
             environ["PWD"] = str(env_path.parent)
         try:
             with open_env(env_path) as f:
+                data = f.read()
+                if isinstance(data, str):
+                    data = data.encode(encoding)
                 load_stream(
-                    BytesIO(f.read()),
+                    BytesIO(data),
                     environ,
                     overwrite,
                     errors,
