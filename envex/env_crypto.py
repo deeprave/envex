@@ -135,7 +135,12 @@ try:
         return BytesIO(decrypted_data)
 
 
-except ImportError:
+except ImportError as e:
+    once = False
+    if not once:
+        once = True
+        logger.warning("Crypto module not found, encryption not available")
+        logger.exception(e)
 
     def encrypt_data(_input_stream: BytesIO, _password: str) -> BytesIO:
         raise EncryptError("Encryption not supported")

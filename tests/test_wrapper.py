@@ -300,7 +300,7 @@ def test_setdefault_exists():
 def test_encrypted_stream_bytes(password):
     data = b"ONE=1\nARG2=two\nENABLED=true\n"
     stream = encrypt_data(io.BytesIO(data), password)
-    env = envex.Env(stream, decrypt=True, password=password)
+    env = envex.Env(stream, password=password)
     assert env("ONE") == "1"
     assert env("ARG2") == "two"
     assert env("ENABLED") == "true"

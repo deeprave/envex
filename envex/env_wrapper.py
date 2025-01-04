@@ -83,8 +83,8 @@ class Env:
             streams.extend(kwargs.pop("streams"))
 
         password = self._resolve_password(
-            kwargs.get("password"),
-            kwargs.get("decrypt", False)
+            kwargs.get("password", None),
+            kwargs.get("decrypt", None)
         )
         kwargs["decrypt"] = bool(password)
         kwargs["password"] = password
@@ -107,20 +107,27 @@ class Env:
             timeout=kwargs.get("timeout", None),
         )
 
-    def _resolve_password(self, password: str|None, decrypt: bool) -> str|None:
-        if not decrypt or not password:
+    def _resolve_password(self, password: str|None, decrypt: bool|None) -> str|None:
+        if decrypt is False:
+            return None
+        env_var = None
+        if decrypt is None and not password:
             for env_var in ("ENV_PASSWORD", "$ENV_PASSWORD", "@ENV_PASSWORD"):
                 if env_var in self.env:
-                    password = self.get(env_var)
-                    if env_var[0] == "$":    # indirect
-                        password = self.get(password[1:], password)
-                    elif env_var[0] == "@":  # from file
-                         pw_file = Path(password[1:])
-                         try:
-                             password = pw_file.read_text().rstrip()
-                         except (IOError, PermissionError) as exc:
-                             raise self.exception(*exc.args) from exc
                     break
+            else:
+                env_var = None
+        elif password:
+            env_var = password
+        if env_var:
+            if env_var[0] == "$":    # indirect
+                password = self.env.get(env_var[1:])
+            elif env_var[0] == "@":  # from file
+                 pw_file = Path(env_var[1:])
+                 try:
+                     password = pw_file.read_text().rstrip()
+                 except (IOError, PermissionError) as exc:
+                     raise self.exception(*exc.args) from exc
         return password or None
 
     @property
@@ -172,7 +179,7 @@ class Env:
         # getting from the environment is the least expensive
         value = self.env.get(var, None)
         # not set or isn't primary, check secrets manager
-        if value is None or not self.env_source:
+        if (value is None or not self.env_source) and hasattr(self, "secret_manager"):
             sm_value = self.secret_manager.get_secret(var, None)
             if sm_value is not None:
                 value = sm_value

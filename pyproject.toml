@@ -15,6 +15,9 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3 :: Only",
 ]
+dependencies = [
+    "pycryptodome>=3.21.0",
+]
 scripts = {envcrypt = "envex.scripts.envcrypt:main", env2hvac = "envex.scripts.env2hvac:main", envsecrets = "envex.scripts.envsecrets:main", seal = "envex.scripts.seal:main"}
 
 [project.urls]
@@ -41,13 +44,7 @@ dev = [
 vault = [
     "hvac>=1.1.1",
 ]
-crypto = [
-    "pycryptodome>=3.21.0",
-]
-
-[tool.uv]
-default-groups = ["dev", "crypto"]
 
 [build-system]
-requires = ["flit-core"]
-build-backend = "flit_core.buildapi"
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
