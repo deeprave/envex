@@ -158,7 +158,7 @@ The `envcrypt` CLI utility supports the encryption and decryption of environment
 ```shell
 usage: envcrypt.py [-h] [-P PASSWORD | -E ENVIRON | -F FILE] [-e | -d] [-r] [-v] input [output]
 
-File encrypt/decrypt (AES-256-CBC with HMAC-SHA256)
+envcrypt: File encrypt/decrypt (AES-256-CBC with HMAC-SHA256)
 
 positional arguments:
 input                    File to encrypt or decrypt
