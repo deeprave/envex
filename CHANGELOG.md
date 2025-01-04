@@ -1,5 +1,10 @@
 # ChangeLog
 
+### v4.1.0
+
+- enhance password resolution and environment handling
+- added ENV_PASSWORD, $ENV_PASSWORD and @ENV_PASSWORD vars to automatically trigger decryption
+
 ### v4.0.0
 
 - :warning: BREAKING CHANGE: additional kwargs passed to Env() are no longer added to the env if readenv=False. This is probably of no consequence as it is a (mis?)feature that was rarely (if ever) used.
