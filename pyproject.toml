@@ -1,6 +1,6 @@
 [project]
 name = "envex"
-version = "4.1.0"
+version = "4.1.1"
 description = "Environment interface with (optionally encrypted) .env with hashicorp vault support"
 readme = "README.md"
 license = { file = "LICENSE.md" }
@@ -46,5 +46,5 @@ vault = [
 ]
 
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["flit-core"]
+build-backend = "flit_core.buildapi"
