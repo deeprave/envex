@@ -82,20 +82,12 @@ class Env:
         if "streams" in kwargs and isinstance(kwargs["streams"], (tuple, list)):
             streams.extend(kwargs.pop("streams"))
 
-        password = kwargs.get("password")
-        if kwargs.get("decrypt", False) and password:
-            if password[0] == "$":  # use environment variable (pre-.env) - '$' prefix e.g. `$VAR` reads from VAR
-                password = self._env.pop(password[1:], None)  # also remove it from the env
-            elif password[0] == "@":  # read password from a file - '@' prefix e.g. `@/file/path`
-                pw_file = Path(password[1:])
-                try:
-                    password = pw_file.read_text().rstrip()
-                except (IOError, PermissionError) as exc:
-                    raise self.exception(*exc.args) from exc
-        if not password:
-            kwargs["decrypt"] = False
-        else:
-            kwargs["password"] = password
+        password = self._resolve_password(
+            kwargs.get("password"),
+            kwargs.get("decrypt", False)
+        )
+        kwargs["decrypt"] = bool(password)
+        kwargs["password"] = password
 
         kwargs.setdefault("environ", self._env)
         if readenv:
@@ -114,6 +106,26 @@ class Env:
             mount_point=mount_point,
             timeout=kwargs.get("timeout", None),
         )
+
+    def _resolve_password(self, password: str|None, decrypt: bool) -> str|None:
+        if not decrypt or not password:
+            for env_var in ("ENV_PASSWORD", "$ENV_PASSWORD", "@ENV_PASSWORD"):
+                if env_var in self.env:
+                    password = self.get(env_var)
+                    if env_var[0] == "$":    # indirect
+                        password = self.get(password[1:], password)
+                    elif env_var[0] == "@":  # from file
+                         pw_file = Path(password[1:])
+                         try:
+                             password = pw_file.read_text().rstrip()
+                         except (IOError, PermissionError) as exc:
+                             raise self.exception(*exc.args) from exc
+                    break
+        return password or None
+
+    @property
+    def env(self):
+        return self._env
 
     @staticmethod
     def os_env():
@@ -155,10 +167,6 @@ class Env:
     @exception.setter
     def exception(self, exc: Type[Exception]):
         self._exception = exc
-
-    @property
-    def env(self):
-        return self._env
 
     def get(self, var: str, default=None):
         # getting from the environment is the least expensive
