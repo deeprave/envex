@@ -138,11 +138,11 @@ wheels = [
 name = "envex"
 version = "4.1.0"
 source = { editable = "." }
-
-[package.dev-dependencies]
-crypto = [
+dependencies = [
     { name = "pycryptodome" },
 ]
+
+[package.dev-dependencies]
 dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -154,9 +154,9 @@ vault = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "pycryptodome", specifier = ">=3.21.0" }]
 
 [package.metadata.requires-dev]
-crypto = [{ name = "pycryptodome", specifier = ">=3.21.0" }]
 dev = [
     { name = "pytest", specifier = ">=7.0" },
     { name = "pytest-cov", specifier = ">=4.1,<7.0" },
