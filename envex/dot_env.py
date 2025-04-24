@@ -262,23 +262,25 @@ def _post_process(environ: MutableMapping[str, str]) -> MutableMapping[str, str]
     - ${VAR:+value} - Use value only if VAR is set
     - $VAR - Variable substitution without braces
     """
+
+    def braced(match, environ):
+        return _process_shell_var(match, environ)
+
+    def unbraced(match, environ):
+        return _process_var_reference(match.group(1), environ)
+
+    def substitutions(value: str, environ: MutableMapping[str, str]) -> str:
+        value = _VAR_BRACES_PATTERN.sub(lambda m: braced(m, environ), value)
+        value = _VAR_NO_BRACES_PATTERN.sub(lambda m: unbraced(m, environ), value)
+        return value
+
+    """Post-process the variables using shell-like variable substitution."""
     for env_key, env_val in environ.items():
         if "$" in env_val:  # Potential variable reference
             original_val = env_val
-
-            # Process ${VAR} style references
-            env_val = _VAR_BRACES_PATTERN.sub(
-                lambda m: _process_shell_var(m, environ), env_val
-            )
-
-            # Process $VAR style references
-            env_val = _VAR_NO_BRACES_PATTERN.sub(
-                lambda m: _process_var_reference(m.group(1), environ), env_val
-            )
-
-            if env_val != original_val:  # don't update unless we need to
+            env_val = substitutions(env_val, environ)
+            if env_val != original_val:
                 environ[env_key] = env_val
-
     return environ
 
 

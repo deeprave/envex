@@ -45,6 +45,11 @@ NESTED_CONDITIONAL=${FIRST:+${SECOND}}
 # Test complex cases
 COMPLEX=${FIRST:+prefix-${SECOND}-suffix}
 COMPLEX_DEFAULT=${NONEXISTENT:-${SECOND}-default}
+
+VAR3=actual
+VAR2=${VAR3:-default}
+VAR1=${VAR2:-${VAR3:-default}}
+NESTED_MULTI=${VAR1:-${VAR2:-${VAR3:-default}}}
 """
     )
 
@@ -95,3 +100,11 @@ def test_complex_cases(monkeypatch):
     env = envex.load_env(search_path=".")
     assert env["COMPLEX"] == "prefix-second-value-suffix"
     assert env["COMPLEX_DEFAULT"] == "second-value-default"
+
+
+def test_multi_level_nested(monkeypatch):
+    """Test multi-level nested variable substitution resolution"""
+
+    monkeypatch.setattr(envex.dot_env, "open_env", shell_vars_env)
+    env = envex.load_env(search_path=".")
+    assert env["NESTED_MULTI"] == "actual"
