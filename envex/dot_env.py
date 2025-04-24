@@ -248,31 +248,21 @@ def _process_shell_var(match_obj, environ: MutableMapping[str, str]) -> str:
 MAX_RECURSION_DEPTH = 12
 
 
-def _process_nested_vars(
-    value: str, environ: MutableMapping[str, str], depth: int = 0
-) -> str:
-    """Process nested variable references in a string with recursion depth control."""
-    if depth >= MAX_RECURSION_DEPTH:
-        # Recursion depth reached, return the value as is to avoid potential infinite recursion.
-        return value
+def _substitute_vars(value: str, environ: MutableMapping[str, str]) -> str:
+    value = _VAR_BRACES_PATTERN.sub(lambda m: _process_shell_var(m, environ), value)
+    value = _VAR_NO_BRACES_PATTERN.sub(
+        lambda m: _process_var_reference(m.group(1), environ), value
+    )
+    return value
 
-    def substitute(current_value: str) -> str:
-        # Process ${VAR} style references
-        updated_value = _VAR_BRACES_PATTERN.sub(
-            lambda m: _process_shell_var(m, environ), current_value
-        )
-        # Process $VAR style references
-        updated_value = _VAR_NO_BRACES_PATTERN.sub(
-            lambda m: _process_var_reference(m.group(1), environ), updated_value
-        )
-        return updated_value
 
-    # apply substitutions to the value
-    new_value = substitute(value)
-    # If processing changed the value, try processing nested substitutions further.
-    if new_value != value:
-        return _process_nested_vars(new_value, environ, depth + 1)
-    return new_value
+def _process_nested_vars(value: str, environ: MutableMapping[str, str]) -> str:
+    for _ in range(MAX_RECURSION_DEPTH):
+        new_value = _substitute_vars(value, environ)
+        if new_value == value:
+            break
+        value = new_value
+    return value
 
 
 def _post_process(environ: MutableMapping[str, str]) -> MutableMapping[str, str]:
