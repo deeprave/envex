@@ -2,7 +2,6 @@
 import contextlib
 import io
 
-import pytest
 
 import envex
 
