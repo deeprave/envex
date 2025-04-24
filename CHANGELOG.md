@@ -1,5 +1,13 @@
 # ChangeLog
 
+### v4.2.0
+
+- Feature: Enhanced shell-like variable substitution in .env files
+  - Added support for `${VAR:-default}` syntax (use default if VAR is not set)
+  - Added support for `${VAR:+value}` syntax (use value only if VAR is set)
+  - Added support for `$VAR` syntax (variable substitution without braces)
+  - Added support for nested variable references like `${VAR:-${DEFAULT}}`
+
 ### v4.1.0
 
 - enhance password resolution and environment handling
