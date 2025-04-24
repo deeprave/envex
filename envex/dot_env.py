@@ -2,9 +2,9 @@
 import os
 import sys
 import contextlib
+import re
 from io import TextIOBase, BytesIO
 from pathlib import Path
-from string import Template
 from typing import Dict, List, MutableMapping, Union, Optional, ContextManager, BinaryIO
 
 from .env_crypto import decrypt_data, DecryptError
@@ -22,6 +22,11 @@ DEFAULT_ENVKEY = "DOTENV"
 DEFAULT_DOTENV = ".env"
 ENCRYPTED_EXT = ".enc"
 DEFAULT_ENCODING = "utf-8"
+
+# Precompiled regular expression patterns
+_MODIFIER_PATTERN = re.compile(r":([-+])")
+_VAR_BRACES_PATTERN = re.compile(r"\${([^{}]+)}")
+_VAR_NO_BRACES_PATTERN = re.compile(r"\$([a-zA-Z_][a-zA-Z0-9_]*)")
 
 
 def unquote(line, quotes="\"'"):
@@ -196,6 +201,7 @@ def _process_var_reference(var_name: str, environ: MutableMapping[str, str]) -> 
     """Process a variable reference and return its value or empty string if not found"""
     return environ.get(var_name, "")
 
+
 def _process_shell_var(match_obj, environ: MutableMapping[str, str]) -> str:
     """
     Process shell-like variable substitution patterns:
@@ -203,8 +209,6 @@ def _process_shell_var(match_obj, environ: MutableMapping[str, str]) -> str:
     ${VAR:-default} - Use default if VAR is not set
     ${VAR:+value} - Use value only if VAR is set
     """
-    import re
-
     # Extract the full match and the variable name
     full_match = match_obj.group(0)
     var_name = match_obj.group(1)
@@ -212,7 +216,7 @@ def _process_shell_var(match_obj, environ: MutableMapping[str, str]) -> str:
     # Check for modifiers
     if ":" in var_name:
         # Handle ${VAR:-default} or ${VAR:+value} patterns
-        parts = re.split(r':([-+])', var_name, maxsplit=1)
+        parts = _MODIFIER_PATTERN.split(var_name, maxsplit=1)
         if len(parts) == 3:
             var_name, modifier, value = parts
 
@@ -237,19 +241,17 @@ def _process_shell_var(match_obj, environ: MutableMapping[str, str]) -> str:
     # Standard variable substitution
     return _process_var_reference(var_name, environ)
 
+
 def _process_nested_vars(value: str, environ: MutableMapping[str, str]) -> str:
     """Process nested variable references in a string"""
-    import re
-
     # Process ${VAR} style references
-    pattern = r'\${([^{}]+)}'
-    value = re.sub(pattern, lambda m: _process_shell_var(m, environ), value)
+    value = _VAR_BRACES_PATTERN.sub(lambda m: _process_shell_var(m, environ), value)
 
     # Process $VAR style references
-    pattern = r'\$([a-zA-Z_][a-zA-Z0-9_]*)'
-    value = re.sub(pattern, lambda m: _process_var_reference(m.group(1), environ), value)
+    value = _VAR_NO_BRACES_PATTERN.sub(lambda m: _process_var_reference(m.group(1), environ), value)
 
     return value
+
 
 def _post_process(environ: MutableMapping[str, str]) -> MutableMapping[str, str]:
     """
@@ -259,19 +261,17 @@ def _post_process(environ: MutableMapping[str, str]) -> MutableMapping[str, str]
     - ${VAR:+value} - Use value only if VAR is set
     - $VAR - Variable substitution without braces
     """
-    import re
-
     for env_key, env_val in environ.items():
         if "$" in env_val:  # Potential variable reference
             original_val = env_val
 
             # Process ${VAR} style references
-            pattern = r'\${([^{}]+)}'
-            env_val = re.sub(pattern, lambda m: _process_shell_var(m, environ), env_val)
+            env_val = _VAR_BRACES_PATTERN.sub(lambda m: _process_shell_var(m, environ), env_val)
 
             # Process $VAR style references
-            pattern = r'\$([a-zA-Z_][a-zA-Z0-9_]*)'
-            env_val = re.sub(pattern, lambda m: _process_var_reference(m.group(1), environ), env_val)
+            env_val = _VAR_NO_BRACES_PATTERN.sub(
+                lambda m: _process_var_reference(m.group(1), environ), env_val
+            )
 
             if env_val != original_val:  # don't update unless we need to
                 environ[env_key] = env_val
