@@ -3,9 +3,17 @@ import os
 import sys
 import contextlib
 import re
-from io import TextIOBase, BytesIO
+from io import TextIOBase, BytesIO, BufferedReader
 from pathlib import Path
-from typing import Dict, List, MutableMapping, Union, Optional, ContextManager, BinaryIO
+from typing import (
+    Dict,
+    List,
+    MutableMapping,
+    Union,
+    Optional,
+    Any,
+    Generator,
+)
 
 from .env_crypto import decrypt_data, DecryptError
 
@@ -57,7 +65,7 @@ def _env_export(
 
 def _env_files(
     env_file: str, search_path: List[Path], parents: bool, decrypt: bool, errors: bool
-) -> List[str]:
+) -> Generator[str | None, Any, None]:
     """expand env_file with the full search path, optionally parents as well"""
 
     def resolve_file(base_path: Path, name: str, _decrypt: bool) -> Optional[str]:
@@ -91,7 +99,7 @@ def _env_files(
 
 
 @contextlib.contextmanager
-def open_env(path: Union[str, Path]) -> ContextManager[BinaryIO]:
+def open_env(path: Union[str, Path]) -> Generator[BufferedReader, Any, None]:
     """same as open, allow monkeypatch"""
     fp = open(path, "rb")
     try:
@@ -168,7 +176,7 @@ def _process_env(
     files_not_found = []
     files_found = False
     for env_path in _env_files(env_file, search_path, parents, decrypt, errors):
-        # insert PWD as container of the env file
+        # insert PWD as the container of the env file
         env_path = Path(env_path).resolve()
         if working_dirs:
             environ["PWD"] = str(env_path.parent)
@@ -223,12 +231,8 @@ def _process_shell_var(match_obj, environ: MutableMapping[str, str]) -> str:
             value = _process_nested_vars(value, environ)
 
             var_value = _process_var_reference(var_name, environ)
-
-            if modifier == "-" and not var_value:
+            if modifier == "-" and not var_value or modifier == "+" and var_value:
                 # Use default value if variable is not set
-                return value
-            elif modifier == "+" and var_value:
-                # Use value only if variable is set
                 return value
             elif modifier == "-":
                 # Variable is set, use its value
@@ -241,17 +245,34 @@ def _process_shell_var(match_obj, environ: MutableMapping[str, str]) -> str:
     return _process_var_reference(var_name, environ)
 
 
-def _process_nested_vars(value: str, environ: MutableMapping[str, str]) -> str:
-    """Process nested variable references in a string"""
-    # Process ${VAR} style references
-    value = _VAR_BRACES_PATTERN.sub(lambda m: _process_shell_var(m, environ), value)
+MAX_RECURSION_DEPTH = 12
 
-    # Process $VAR style references
-    value = _VAR_NO_BRACES_PATTERN.sub(
-        lambda m: _process_var_reference(m.group(1), environ), value
-    )
 
-    return value
+def _process_nested_vars(
+    value: str, environ: MutableMapping[str, str], depth: int = 0
+) -> str:
+    """Process nested variable references in a string with recursion depth control."""
+    if depth >= MAX_RECURSION_DEPTH:
+        # Recursion depth reached, return the value as is to avoid potential infinite recursion.
+        return value
+
+    def substitute(current_value: str) -> str:
+        # Process ${VAR} style references
+        updated_value = _VAR_BRACES_PATTERN.sub(
+            lambda m: _process_shell_var(m, environ), current_value
+        )
+        # Process $VAR style references
+        updated_value = _VAR_NO_BRACES_PATTERN.sub(
+            lambda m: _process_var_reference(m.group(1), environ), updated_value
+        )
+        return updated_value
+
+    # apply substitutions to the value
+    new_value = substitute(value)
+    # If processing changed the value, try processing nested substitutions further.
+    if new_value != value:
+        return _process_nested_vars(new_value, environ, depth + 1)
+    return new_value
 
 
 def _post_process(environ: MutableMapping[str, str]) -> MutableMapping[str, str]:
@@ -262,25 +283,11 @@ def _post_process(environ: MutableMapping[str, str]) -> MutableMapping[str, str]
     - ${VAR:+value} - Use value only if VAR is set
     - $VAR - Variable substitution without braces
     """
-
-    def braced(match, environ):
-        return _process_shell_var(match, environ)
-
-    def unbraced(match, environ):
-        return _process_var_reference(match.group(1), environ)
-
-    def substitutions(value: str, environ: MutableMapping[str, str]) -> str:
-        value = _VAR_BRACES_PATTERN.sub(lambda m: braced(m, environ), value)
-        value = _VAR_NO_BRACES_PATTERN.sub(lambda m: unbraced(m, environ), value)
-        return value
-
-    """Post-process the variables using shell-like variable substitution."""
-    for env_key, env_val in environ.items():
-        if "$" in env_val:  # Potential variable reference
-            original_val = env_val
-            env_val = substitutions(env_val, environ)
-            if env_val != original_val:
-                environ[env_key] = env_val
+    for key, val in environ.items():
+        if "$" in val:  # Potential variable reference!
+            new_val = _process_nested_vars(val, environ)
+            if new_val != val:
+                environ[key] = new_val
     return environ
 
 
@@ -312,7 +319,7 @@ def load_env(
     :param environ: environment mapping to process
     :param overwrite: whether to overwrite existing values
     :param parents: whether to search upwards until a file is found
-    :param update: option to update os.environ, default=True
+    :param update: update os.environ, default=True
     :param errors: whether to raise FileNotFoundError if env_file not found
     :param working_dirs: whether to add the env file's directory
     :param decrypt: whether to support encrypted .env.enc
@@ -341,7 +348,7 @@ def load_env(
         search_path = search_path.split(os.pathsep)
     # convert to the array of Path for use internally
     search_path = [Path(p) for p in search_path]
-    # if overwriting, traverse the path in reverse order so first .env files have priority
+    # if overwriting, traverse the path in reverse order so the first .env files have priority
     if overwrite:
         search_path.reverse()
 
