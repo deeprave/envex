@@ -210,7 +210,6 @@ def _process_shell_var(match_obj, environ: MutableMapping[str, str]) -> str:
     ${VAR:+value} - Use value only if VAR is set
     """
     # Extract the full match and the variable name
-    full_match = match_obj.group(0)
     var_name = match_obj.group(1)
 
     # Check for modifiers
@@ -248,7 +247,9 @@ def _process_nested_vars(value: str, environ: MutableMapping[str, str]) -> str:
     value = _VAR_BRACES_PATTERN.sub(lambda m: _process_shell_var(m, environ), value)
 
     # Process $VAR style references
-    value = _VAR_NO_BRACES_PATTERN.sub(lambda m: _process_var_reference(m.group(1), environ), value)
+    value = _VAR_NO_BRACES_PATTERN.sub(
+        lambda m: _process_var_reference(m.group(1), environ), value
+    )
 
     return value
 
@@ -266,7 +267,9 @@ def _post_process(environ: MutableMapping[str, str]) -> MutableMapping[str, str]
             original_val = env_val
 
             # Process ${VAR} style references
-            env_val = _VAR_BRACES_PATTERN.sub(lambda m: _process_shell_var(m, environ), env_val)
+            env_val = _VAR_BRACES_PATTERN.sub(
+                lambda m: _process_shell_var(m, environ), env_val
+            )
 
             # Process $VAR style references
             env_val = _VAR_NO_BRACES_PATTERN.sub(
