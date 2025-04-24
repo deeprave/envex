@@ -192,17 +192,90 @@ def _process_env(
     return environ
 
 
+def _process_var_reference(var_name: str, environ: MutableMapping[str, str]) -> str:
+    """Process a variable reference and return its value or empty string if not found"""
+    return environ.get(var_name, "")
+
+def _process_shell_var(match_obj, environ: MutableMapping[str, str]) -> str:
+    """
+    Process shell-like variable substitution patterns:
+    ${VAR} - Standard variable substitution
+    ${VAR:-default} - Use default if VAR is not set
+    ${VAR:+value} - Use value only if VAR is set
+    """
+    import re
+
+    # Extract the full match and the variable name
+    full_match = match_obj.group(0)
+    var_name = match_obj.group(1)
+
+    # Check for modifiers
+    if ":" in var_name:
+        # Handle ${VAR:-default} or ${VAR:+value} patterns
+        parts = re.split(r':([-+])', var_name, maxsplit=1)
+        if len(parts) == 3:
+            var_name, modifier, value = parts
+
+            # Process any nested variable references in the value
+            value = _process_nested_vars(value, environ)
+
+            var_value = _process_var_reference(var_name, environ)
+
+            if modifier == "-" and not var_value:
+                # Use default value if variable is not set
+                return value
+            elif modifier == "+" and var_value:
+                # Use value only if variable is set
+                return value
+            elif modifier == "-":
+                # Variable is set, use its value
+                return var_value
+            else:  # modifier == "+" and not var_value
+                # Variable is not set, return empty string
+                return ""
+
+    # Standard variable substitution
+    return _process_var_reference(var_name, environ)
+
+def _process_nested_vars(value: str, environ: MutableMapping[str, str]) -> str:
+    """Process nested variable references in a string"""
+    import re
+
+    # Process ${VAR} style references
+    pattern = r'\${([^{}]+)}'
+    value = re.sub(pattern, lambda m: _process_shell_var(m, environ), value)
+
+    # Process $VAR style references
+    pattern = r'\$([a-zA-Z_][a-zA-Z0-9_]*)'
+    value = re.sub(pattern, lambda m: _process_var_reference(m.group(1), environ), value)
+
+    return value
+
 def _post_process(environ: MutableMapping[str, str]) -> MutableMapping[str, str]:
-    """post-process the variables using ${substitutions}"""
+    """
+    Post-process the variables using shell-like variable substitution:
+    - ${VAR} - Standard variable substitution
+    - ${VAR:-default} - Use default if VAR is not set
+    - ${VAR:+value} - Use value only if VAR is set
+    - $VAR - Variable substitution without braces
+    """
+    import re
+
     for env_key, env_val in environ.items():
-        if all(v in env_val for v in ("${", "}")):  # looks like template
-            # ignore anything that does not resolve, don't throw an exception!
-            # todo: handle colon separators similar to shell handling..
-            #  e.g. PATH=${VALUE:+$VALUE:}some_value
-            #  ${VALUE:-default}, ${VALUE:=default}
-            val = Template(env_val).safe_substitute(environ)
-            if val != env_val:  # don't update unless we need to
-                environ[env_key] = val
+        if "$" in env_val:  # Potential variable reference
+            original_val = env_val
+
+            # Process ${VAR} style references
+            pattern = r'\${([^{}]+)}'
+            env_val = re.sub(pattern, lambda m: _process_shell_var(m, environ), env_val)
+
+            # Process $VAR style references
+            pattern = r'\$([a-zA-Z_][a-zA-Z0-9_]*)'
+            env_val = re.sub(pattern, lambda m: _process_var_reference(m.group(1), environ), env_val)
+
+            if env_val != original_val:  # don't update unless we need to
+                environ[env_key] = env_val
+
     return environ
 
 
