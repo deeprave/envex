@@ -28,7 +28,7 @@ repository = "https://github.com/deeprave/envex"
 namespace-packages = ["envex"]
 
 [tool.pytest.ini_options]
-minversion = "8.0"
+minversion = "9.0"
 markers = "integration: mark a test as an integration test"
 addopts = "-m 'not integration'"
 pythonpath = ["."]
