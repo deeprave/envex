@@ -1,5 +1,11 @@
 # ChangeLog
 
+### v4.3.0
+
+- Maintenance release only.
+- Dependency and tooling upgrades.
+- Phase out Python 3.11 support and add Python 3.14 support.
+
 ### v4.2.0
 
 - Feature: Enhanced shell-like variable substitution in .env files
