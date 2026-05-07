@@ -166,13 +166,6 @@ def create_or_update_secrets(secrets, key, cert, verbose):
     certpath = Path(cert).resolve().as_posix() if cert else None
     sm = secrets_manager(verify=certpath)
     sm.set_secrets(key, values=secrets)
-    if verbose:
-        import json
-
-        data = sm.get_secrets(key) or secrets
-        print(f"{sm.base_path}/{key}:")
-        for s in json.dumps(data, indent=4).splitlines():
-            print(f"    {s}")
 
 
 def main(args):
