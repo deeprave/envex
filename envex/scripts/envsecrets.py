@@ -166,6 +166,12 @@ def create_or_update_secrets(secrets, key, cert, verbose):
     certpath = Path(cert).resolve().as_posix() if cert else None
     sm = secrets_manager(verify=certpath)
     sm.set_secrets(key, values=secrets)
+    if verbose:
+        print(
+            f"{len(secrets)} secret{'' if len(secrets) == 1 else 's'} updated at "
+            f"{sm.base_path}/{key}",
+            file=sys.stderr,
+        )
 
 
 def main(args):
