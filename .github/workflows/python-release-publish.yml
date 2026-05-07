@@ -5,14 +5,14 @@ on:
     types: [created]
 
 env:
-  TARGET_PYTHON_VERSION: '3.11'
+  TARGET_PYTHON_VERSION: "3.12"
 
 jobs:
   checks:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.13", "3.12", "3.11"]
+        python-version: ["3.14", "3.13", "3.12"]
 
     steps:
       - name: checkout
