@@ -4,7 +4,7 @@ version = "4.2.1"
 description = "Environment interface with (optionally encrypted) .env with hashicorp vault support"
 readme = "README.md"
 license = { file = "LICENSE.md" }
-requires-python = ">=3.11"
+requires-python = ">=3.12,<3.15"
 authors = [
     { name = "David Nugent", email = "davidn@uniquode.io" }
 ]
