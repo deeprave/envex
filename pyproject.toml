@@ -1,6 +1,6 @@
 [project]
 name = "envex"
-version = "4.2.0"
+version = "4.2.1"
 description = "Environment interface with (optionally encrypted) .env with hashicorp vault support"
 readme = "README.md"
 license = { file = "LICENSE.md" }
@@ -10,13 +10,13 @@ authors = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-    "pycryptodome>=3.21.0",
+    "pycryptodome>=3.23.0",
 ]
 scripts = {envcrypt = "envex.scripts.envcrypt:main", env2hvac = "envex.scripts.env2hvac:main", envsecrets = "envex.scripts.envsecrets:main", seal = "envex.scripts.seal:main"}
 
@@ -34,17 +34,20 @@ addopts = "-m 'not integration'"
 pythonpath = ["."]
 testpaths = ["tests"]
 
+[tool.uv.build-backend]
+module-root = ""
+
 [dependency-groups]
 dev = [
-    "pytest-cov>=4.1,<8.0",
-    "pytest-mock>=3.11.1",
-    "pytest>=7.0",
-    "testcontainers>=4.4.0",
+    "pytest-cov>=7.1,<8.0",
+    "pytest-mock>=3.15.1",
+    "pytest>=9.0",
+    "testcontainers>=4.14.0",
 ]
 vault = [
     "hvac>=1.1.1",
 ]
 
 [build-system]
-requires = ["flit-core"]
-build-backend = "flit_core.buildapi"
+requires = ["uv_build>=0.11.10,<0.12.0"]
+build-backend = "uv_build"

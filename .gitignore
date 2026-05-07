@@ -58,7 +58,7 @@ venv/
 ENV/
 
 # mypy, pytest, ruff
-.*_cache/
+.*_cache
 
 
 ### Node template
@@ -299,6 +299,8 @@ Session.vim
 /html/media/
 .ipython/
 .env
+.envrc
+.todo
 
 requirements.txt
 test.env*
