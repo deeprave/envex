@@ -17,7 +17,7 @@ An `Env` instance delivers a lot of functionality by providing a type-smart fron
 pip install envex
 ```
 
-`envex` expects Python 3.11 or later; 3.7 through 3.10 should also work but haven't been tested.
+`envex` supports Python 3.12 through 3.14.
 
 ## Features
 
