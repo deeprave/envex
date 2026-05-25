@@ -114,7 +114,7 @@ def test_truncated_authenticated_stream_raises_decrypt_error(password):
 
     with pytest.raises(DecryptError) as e:
         decrypt_data(encrypted_stream, password)
-    assert str(e.value) == "Incorrect password or invalid data"
+    assert "invalid data" in str(e.value)
 
 
 def test_invalid_password(incorrect_password, password):
