@@ -30,7 +30,7 @@ def handler(
 ):
     sm = SecretsManager(url=url, token=token, cert=cert, verify=verify)
     if unseal:
-        sm.unseal(keys=unseal.split(","), root_token=token or "")
+        sm.unseal(keys=unseal.split(","), root_token=token)
 
     client = sm.client
     if client is None:

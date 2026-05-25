@@ -120,15 +120,28 @@ def test_is_true():
     env = envex.Env()
     assert env.is_true(1)
     assert env.is_true("1")
-    assert env.is_true("True")
-    assert env.is_true("yes")
     assert not env.is_true(0)
     assert not env.is_true("0")
-    assert not env.is_true(b"0")
     assert not env.is_true(False)
-    assert not env.is_true("False")
-    assert not env.is_true("no")
     assert not env.is_true(None)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (" true ", True),
+        ("  FALSE\n", False),
+        ("YeS", True),
+        ("TrUe", True),
+        ("No", False),
+        (b"true", True),
+        (b"YES", True),
+        (b"0", False),
+    ],
+)
+def test_is_true_normalizes_strings_and_bytes(value, expected):
+    env = envex.Env()
+    assert env.is_true(value) is expected
 
 
 @pytest.mark.parametrize("value", ["treu", "truthy", "onward", "yesplease", "2"])

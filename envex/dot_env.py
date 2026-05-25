@@ -86,7 +86,8 @@ def _env_files(
         searched.append(path)
 
         for sub_path in [path] + list(path.parents):
-            if env_path := resolve_file(sub_path, env_file, decrypt):
+            env_path = resolve_file(sub_path, env_file, decrypt)
+            if env_path is not None:
                 yield env_path
                 break
             elif not parents:
