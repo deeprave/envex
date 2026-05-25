@@ -104,7 +104,7 @@ Other kwargs that can be passed to `Env` when created:
 * errors: bool whether to raise error on missing env_file (default is False)
 * decrypt: bool whether to support decryption of encrypted env files (default is False)
 * password: str the password, environment variable or file/path to use for decryption (see below)
-* kwargs: (keyword args, optional) additional environment variables to add/override
+* kwargs: (keyword args, optional) additional environment variables to add/override, after recognized loader and Vault options are applied
 
 In addition, Env supports a few HashiCorp Vault configuration parameters as well:
 
@@ -147,6 +147,7 @@ assert env.get('A_LIST_VALUE') == '1,"two",3,"four"'
 assert env.list('A_LIST_VALUE') == ['1', 'two', '3', 'four']
 assert env('A_LIST_VALUE', type=list) == ['1', 'two', '3', 'four']
 ```
+Integer and boolean parsing is strict: missing or empty integer values parse as `0`, but malformed non-empty integer strings raise `ValueError`.
 
 Environment variables are always stored as strings.
 This is enforced by the underlying os.environ, but also true of any provided environment, which must use the `MutableMapping[str, str]` contract.

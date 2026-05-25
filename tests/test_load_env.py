@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import contextlib
 import io
+import importlib.util
 
 import pytest
 
@@ -31,6 +32,14 @@ DOUBLE_QUOTED="a quoted value"
 SINGLE_QUOTED='a quoted value'
 """
     )
+
+
+def load_module(module_path):
+    spec = importlib.util.spec_from_file_location(module_path.stem, module_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_load_env(monkeypatch, envmap):
@@ -76,3 +85,45 @@ def test_quoted_value(monkeypatch, envmap):
     env = envex.load_env(search_path=__file__, environ=envmap)
     assert env["DOUBLE_QUOTED"] == "a quoted value"
     assert env["SINGLE_QUOTED"] == "a quoted value"
+
+
+def test_load_env_default_search_path_uses_external_caller(tmp_path, monkeypatch):
+    caller_dir = tmp_path / "caller"
+    caller_dir.mkdir()
+    (caller_dir / ".env").write_text("FROM_CALLER=direct\n")
+    module_path = caller_dir / "caller_module.py"
+    module_path.write_text(
+        "import envex\n"
+        "\n"
+        "def load():\n"
+        "    return envex.load_env(environ={}, update=False, working_dirs=False)\n"
+    )
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+
+    module = load_module(module_path)
+    env = module.load()
+
+    assert env["FROM_CALLER"] == "direct"
+
+
+def test_env_readenv_default_search_path_skips_envex_wrappers(tmp_path, monkeypatch):
+    caller_dir = tmp_path / "caller"
+    caller_dir.mkdir()
+    (caller_dir / ".env").write_text("FROM_CALLER=wrapper\n")
+    module_path = caller_dir / "caller_module.py"
+    module_path.write_text(
+        "import envex\n"
+        "\n"
+        "def load():\n"
+        "    return envex.Env(readenv=True, environ={}, update=False, working_dirs=False)\n"
+    )
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+
+    module = load_module(module_path)
+    env = module.load()
+
+    assert env["FROM_CALLER"] == "wrapper"

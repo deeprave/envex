@@ -118,6 +118,45 @@ def test_env_int(monkeypatch):
     assert env.int("DEFAULTINTVALUE", default=981) == 981
     assert env("DEFAULTINTVALUE", default=981, type=int) == 981
     assert env("DEFAULTINTVALUE", type=int) == 981
+    assert env.int("MISSINGINTVALUE") == 0
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("-42", -42),
+        ("+42", 42),
+        (" 42 ", 42),
+    ],
+)
+def test_env_int_accepts_signed_integer_values(value, expected):
+    env = envex.Env({"PORT": value}, environ={})
+
+    assert env.int("PORT") == expected
+
+
+@pytest.mark.parametrize("value", ["12abc", "4.2", "--42", object()])
+def test_env_int_rejects_invalid_values(value):
+    env = envex.Env(environ={"PORT": value})
+
+    with pytest.raises(ValueError):
+        env.int("PORT")
+
+
+def test_env_kwargs_are_environment_values():
+    env = envex.Env(environ={}, EXTRA_VALUE="extra", PORT=8080, OMITTED=None)
+
+    assert env["EXTRA_VALUE"] == "extra"
+    assert env["PORT"] == "8080"
+    assert "OMITTED" not in env.env
+
+
+def test_env_kwargs_are_not_forwarded_to_load_env(monkeypatch):
+    monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
+
+    env = envex.Env(readenv=True, update=False, environ={}, EXTRA_VALUE="extra")
+
+    assert env["EXTRA_VALUE"] == "extra"
 
 
 def test_env_float(monkeypatch):
