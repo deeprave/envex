@@ -31,9 +31,8 @@ def _load_existing_secrets(sm: SecretsManager, path: str) -> None:
         if not _is_forbidden(exc):
             raise
         logging.warning(
-            "Cannot read existing secrets at '%s'; importing without preserving "
-            "existing values",
-            path,
+            "Cannot read existing Vault data; importing without preserving existing "
+            "values"
         )
 
 
