@@ -14,6 +14,8 @@ from typing import Union
 # existing AES-CBC files can still be detected and decrypted.
 MAGIC_BYTES = b"SECF"  # "Secure Encrypted File"
 AUTH_MAGIC_BYTES = b"SECG"
+if len(MAGIC_BYTES) != len(AUTH_MAGIC_BYTES):
+    raise RuntimeError("Encrypted file magic headers must have equal lengths")
 ITERATIONS = 1800000
 AES_KEY_LENGTH = 32  # max bytes for AES256
 SALT_LENGTH = 16
@@ -90,6 +92,9 @@ try:
             raise DecryptError(DECRYPT_ERROR_MESSAGE)
         return data
 
+    def _read_magic(input_stream: BytesIO) -> bytes:
+        return input_stream.read(len(MAGIC_BYTES))
+
     def encrypt_data(
         input_stream: Union[BytesIO, TextIOBase], password: str, encoding: str = "utf-8"
     ) -> BytesIO:
@@ -97,7 +102,7 @@ try:
         Encrypt a file using AES-256-GCM with a password-derived key.
         """
         input_stream = _read_stream(input_stream, encoding)
-        first_bytes = input_stream.read(max(len(MAGIC_BYTES), len(AUTH_MAGIC_BYTES)))
+        first_bytes = _read_magic(input_stream)
         if first_bytes in (MAGIC_BYTES, AUTH_MAGIC_BYTES):
             logger.debug("Attempted to encrypt an already encrypted stream")
             raise EncryptError("This data is already encrypted")
@@ -138,10 +143,8 @@ try:
         logger.debug(f"Decryption successful ({len(decrypted_data)} bytes)")
         return BytesIO(decrypted_data)
 
-    def _decrypt_legacy_cbc(
-        input_stream: BytesIO, password: str, salt_prefix: bytes
-    ) -> BytesIO:
-        salt = salt_prefix + _read_exact(input_stream, SALT_LENGTH - len(salt_prefix))
+    def _decrypt_legacy_cbc(input_stream: BytesIO, password: str) -> BytesIO:
+        salt = _read_exact(input_stream, SALT_LENGTH)
         iv = _read_exact(input_stream, LEGACY_IV_LENGTH)
         encrypted_data = input_stream.read()
         key, _ = generate_key_from_password(password, salt)
@@ -159,15 +162,15 @@ try:
         """
         Decrypt data that was encrypted using encrypt_data()
         """
-        header = input_stream.read(len(AUTH_MAGIC_BYTES))
+        header = _read_magic(input_stream)
         if header == AUTH_MAGIC_BYTES:
             return _decrypt_gcm(input_stream, password)
-        if not header.startswith(MAGIC_BYTES):
+        if header != MAGIC_BYTES:
             logger.debug("Attempted to decrypt a non-encrypted stream")
             raise DecryptError("This data does not look to be encrypted")
         if not allow_legacy:
             raise DecryptError("Legacy AES-CBC data requires explicit legacy decryption")
-        return _decrypt_legacy_cbc(input_stream, password, header[len(MAGIC_BYTES) :])
+        return _decrypt_legacy_cbc(input_stream, password)
 
 
 except ImportError as e:
