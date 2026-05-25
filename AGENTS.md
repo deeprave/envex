@@ -4,3 +4,4 @@
 - Update `.todo/context.md` at the conclusion of each work iteration so the next handoff has current status and decisions.
 - Use `.todo/` for working notes, temporary plans, review handoffs, and other short-lived coordination documents.
 - Do not include temporary `.todo/` working documents in normal commits unless explicitly asked.
+- Where an issue prefix is available, use it as a prefix on the pull request title.
