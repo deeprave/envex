@@ -29,6 +29,13 @@ def password():
     return "ajf4vDFa_849&s"
 
 
+def write_encrypted_env(tmp_path, password, data=b"ONE=1\nARG2=two\nENABLED=true\n"):
+    env_file = tmp_path / ".env.enc"
+    stream = encrypt_data(io.BytesIO(data), password)
+    env_file.write_bytes(stream.getvalue())
+    return env_file
+
+
 @contextlib.contextmanager
 def dotenv(_ignored):
     TEST_ENV_STREAM.seek(0)
@@ -431,6 +438,84 @@ def test_encrypted_stream_bytes_env(password):
     data = b"ONE=1\nARG2=two\nENABLED=true\n"
     stream = encrypt_data(io.BytesIO(data), password)
     env = envex.Env(stream, decrypt=True, password="$TEST_PASSWORD")
+    assert env("ONE") == "1"
+    assert env("ARG2") == "two"
+    assert env("ENABLED") == "true"
+
+
+def test_encrypted_env_file_uses_plain_env_password(password, tmp_path):
+    write_encrypted_env(tmp_path, password)
+
+    env = envex.Env(
+        readenv=True,
+        environ={"ENV_PASSWORD": password},
+        env_file=".env",
+        search_path=tmp_path,
+        update=False,
+    )
+
+    assert env("ONE") == "1"
+    assert env("ARG2") == "two"
+    assert env("ENABLED") == "true"
+
+
+def test_encrypted_env_file_uses_indirect_env_password(password, tmp_path):
+    write_encrypted_env(tmp_path, password)
+
+    env = envex.Env(
+        readenv=True,
+        environ={"ENV_PASSWORD": "$TEST_PASSWORD", "TEST_PASSWORD": password},
+        env_file=".env",
+        search_path=tmp_path,
+        update=False,
+    )
+
+    assert env("ONE") == "1"
+    assert env("ARG2") == "two"
+    assert env("ENABLED") == "true"
+
+
+def test_encrypted_env_file_uses_file_env_password(password, tmp_path):
+    write_encrypted_env(tmp_path, password)
+    password_file = tmp_path / "password.txt"
+    password_file.write_text(f"{password}\n")
+
+    env = envex.Env(
+        readenv=True,
+        environ={"ENV_PASSWORD": f"@{password_file}"},
+        env_file=".env",
+        search_path=tmp_path,
+        update=False,
+    )
+
+    assert env("ONE") == "1"
+    assert env("ARG2") == "two"
+    assert env("ENABLED") == "true"
+
+
+def test_decrypt_false_ignores_env_password(password, tmp_path):
+    write_encrypted_env(tmp_path, password)
+
+    env = envex.Env(
+        readenv=True,
+        decrypt=False,
+        environ={"ENV_PASSWORD": password},
+        env_file=".env",
+        search_path=tmp_path,
+        update=False,
+    )
+
+    assert env.get("ONE") is None
+
+
+def test_explicit_password_file_selector(password, tmp_path):
+    data = b"ONE=1\nARG2=two\nENABLED=true\n"
+    stream = encrypt_data(io.BytesIO(data), password)
+    password_file = tmp_path / "password.txt"
+    password_file.write_text(f"{password}\n")
+
+    env = envex.Env(stream, decrypt=True, password=f"@{password_file}", environ={})
+
     assert env("ONE") == "1"
     assert env("ARG2") == "two"
     assert env("ENABLED") == "true"

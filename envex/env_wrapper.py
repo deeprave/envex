@@ -111,28 +111,25 @@ class Env:
             timeout=kwargs.get("timeout", None),
         )
 
+    def _resolve_password_selector(self, selector: str | None) -> str | None:
+        if not selector:
+            return None
+        if selector[0] == "$":  # indirect
+            return self.env.get(selector[1:]) or None
+        if selector[0] == "@":  # from file
+            pw_file = Path(selector[1:])
+            try:
+                return pw_file.read_text().rstrip() or None
+            except (IOError, PermissionError) as exc:
+                raise self.exception(*exc.args) from exc
+        return selector
+
     def _resolve_password(self, password: str | None, decrypt: bool | None) -> str | None:
         if decrypt is False:
             return None
-        env_var = None
-        if decrypt is None and not password:
-            for env_var in ("ENV_PASSWORD", "$ENV_PASSWORD", "@ENV_PASSWORD"):
-                if env_var in self.env:
-                    break
-            else:
-                env_var = None
-        elif password:
-            env_var = password
-        if env_var:
-            if env_var[0] == "$":  # indirect
-                password = self.env.get(env_var[1:])
-            elif env_var[0] == "@":  # from file
-                pw_file = Path(env_var[1:])
-                try:
-                    password = pw_file.read_text().rstrip()
-                except (IOError, PermissionError) as exc:
-                    raise self.exception(*exc.args) from exc
-        return password or None
+        if password:
+            return self._resolve_password_selector(password)
+        return self._resolve_password_selector(self.env.get("ENV_PASSWORD"))
 
     @property
     def env(self):
