@@ -20,6 +20,9 @@
 - `Env.int()` now parses signed integer strings correctly and raises `ValueError` for malformed non-empty integer values instead of silently returning `0`.
 - `Env(...)` now separates recognized loader/Vault options from additional environment-variable kwargs, so keyword environment overrides behave as documented.
 - Default `.env` discovery now uses a lightweight caller-frame lookup that skips envex-internal wrapper frames instead of relying on `inspect.stack()[1]`.
+- Dotenv parsing now preserves intentional empty values such as `KEY=` and `export KEY=`.
+- Missing dotenv files are now handled explicitly without yielding phantom paths or setting `PWD` for nonexistent files.
+- Encrypted-looking streams now raise `DecryptError` when decryption fails instead of falling back to plaintext parsing; plaintext fallback remains available for non-encrypted-looking streams.
 - Test Vault container setup now avoids deprecated `testcontainers.vault.VaultContainer` imports, keeping warning-as-error test collection clean.
 - Documentation now uses the official HashiCorp Vault capitalization.
 
