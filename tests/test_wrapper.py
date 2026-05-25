@@ -119,8 +119,10 @@ def test_env_float(monkeypatch):
 def test_is_true():
     env = envex.Env()
     assert env.is_true(1)
+    assert env.is_true(1.0)
     assert env.is_true("1")
     assert not env.is_true(0)
+    assert not env.is_true(0.0)
     assert not env.is_true("0")
     assert not env.is_true(False)
     assert not env.is_true(None)
@@ -146,6 +148,13 @@ def test_is_true_normalizes_strings_and_bytes(value, expected):
 
 @pytest.mark.parametrize("value", ["treu", "truthy", "onward", "yesplease", "2"])
 def test_is_true_rejects_invalid_strings(value):
+    env = envex.Env()
+    with pytest.raises(ValueError):
+        env.is_true(value)
+
+
+@pytest.mark.parametrize("value", [2, 2.0, 0.5, [], [1], {}, object()])
+def test_is_true_rejects_invalid_non_string_values(value):
     env = envex.Env()
     with pytest.raises(ValueError):
         env.is_true(value)

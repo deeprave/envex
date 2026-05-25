@@ -286,7 +286,7 @@ class Env:
             return False
         if val is True:
             return True
-        if isinstance(val, int):
+        if isinstance(val, (int, float)):
             if val in (0, 1):
                 return bool(val)
             raise ValueError(f"Invalid boolean value: {val!r}")
@@ -302,7 +302,7 @@ class Env:
             if normalized in cls._BOOLEAN_FALSE_STRINGS:
                 return False
             raise ValueError(f"Invalid boolean value: {val!r}")
-        return bool(val)
+        raise ValueError(f"Invalid boolean value: {val!r}")
 
     @classmethod
     def _int(cls, val):
