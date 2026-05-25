@@ -24,6 +24,20 @@ class Env:
     _BOOLEAN_TRUE_STRINGS = frozenset(("1", "en", "ok", "on", "t", "true", "y", "yes"))
     _BOOLEAN_FALSE_STRINGS = frozenset(("", "0", "f", "false", "n", "no", "off"))
     _EXCEPTION_CLS = KeyError
+    _LOAD_ENV_KWARGS = frozenset(
+        (
+            "env_file",
+            "search_path",
+            "overwrite",
+            "parents",
+            "update",
+            "errors",
+            "working_dirs",
+            "decrypt",
+            "password",
+            "encoding",
+        )
+    )
 
     def __init__(
         self,
@@ -68,6 +82,7 @@ class Env:
         @param mount_point: (optional) str vault secrets mount point (default=None, determined by engine)
         @param working_dirs: (optional) bool whether to include PWD/CWD (default=True)
             -
+        @param timeout: (optional) int timeout for requests sent to Vault.
         @param kwargs: (optional) environment variables to add/override
         """
         self._env = self.os_env() if environ is None else environ
@@ -81,19 +96,29 @@ class Env:
             elif isinstance(arg, (BytesIO, TextIOBase)):
                 streams.append(arg)
 
-        if "streams" in kwargs and isinstance(kwargs["streams"], (tuple, list)):
-            streams.extend(kwargs.pop("streams"))
+        stream_kwargs = kwargs.pop("streams", ())
+        if isinstance(stream_kwargs, (tuple, list)):
+            streams.extend(stream_kwargs)
+        elif isinstance(stream_kwargs, (BytesIO, TextIOBase)):
+            streams.append(stream_kwargs)
+
+        timeout = kwargs.pop("timeout", None)
+        load_env_kwargs = {
+            key: kwargs.pop(key) for key in list(kwargs) if key in self._LOAD_ENV_KWARGS
+        }
+
+        self.set(kwargs)
 
         password = self._resolve_password(
-            kwargs.get("password", None), kwargs.get("decrypt", None)
+            load_env_kwargs.get("password", None), load_env_kwargs.get("decrypt", None)
         )
-        kwargs["decrypt"] = bool(password)
-        kwargs["password"] = password
+        load_env_kwargs["decrypt"] = bool(password)
+        load_env_kwargs["password"] = password
 
-        kwargs.setdefault("environ", self._env)
+        load_env_kwargs.setdefault("environ", self._env)
         if readenv:
-            self.read_env(**kwargs)
-        self.read_streams(*streams, **kwargs)
+            self.read_env(**load_env_kwargs)
+        self.read_streams(*streams, **load_env_kwargs)
         self.env_source = self.env.get("ENVEX_SOURCE", "env") == "env"
         vault_verify = (
             verify
@@ -108,7 +133,7 @@ class Env:
             base_path=base_path,
             engine=engine,
             mount_point=mount_point,
-            timeout=kwargs.get("timeout", None),
+            timeout=timeout,
         )
 
     def _resolve_password_selector(self, selector: str | None) -> str | None:
@@ -312,9 +337,16 @@ class Env:
 
     @classmethod
     def _int(cls, val):
-        return (
-            val if isinstance(val, int) else int(val) if val and str.isdigit(val) else 0
-        )
+        if val is None or val == "":
+            return 0
+        if isinstance(val, bool):
+            return int(val)
+        if isinstance(val, int):
+            return val
+        try:
+            return int(val)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Invalid integer value: {val!r}") from exc
 
     @classmethod
     def _float(cls, val):

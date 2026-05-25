@@ -35,6 +35,7 @@ DEFAULT_ENCODING = "utf-8"
 _MODIFIER_PATTERN = re.compile(r":([-+])")
 _VAR_BRACES_PATTERN = re.compile(r"\${([^{}]+)}")
 _VAR_NO_BRACES_PATTERN = re.compile(r"\$([a-zA-Z_][a-zA-Z0-9_]*)")
+_PACKAGE_ROOT = Path(__file__).resolve().parent
 
 
 def unquote(line, quotes="\"'"):
@@ -288,6 +289,33 @@ def _update_os_env(environ: MutableMapping[str, str]) -> MutableMapping[str, str
     return os.environ
 
 
+def _is_envex_frame(filename: str) -> bool:
+    try:
+        return Path(filename).resolve().is_relative_to(_PACKAGE_ROOT)
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+
+def _default_search_path() -> list[str]:
+    import inspect
+
+    frame = inspect.currentframe()
+    try:
+        frame = frame.f_back if frame else None
+        while frame:
+            filename = frame.f_code.co_filename
+            if (
+                filename
+                and not filename.startswith("<")
+                and not _is_envex_frame(filename)
+            ):
+                return [".", filename]
+            frame = frame.f_back
+        return ["."]
+    finally:
+        del frame
+
+
 def load_env(
     env_file: str | Path | None = None,
     search_path: Union[None, Union[List[str], List[Path]], str] = None,
@@ -328,10 +356,7 @@ def load_env(
 
     # determine where to search
     if search_path is None:
-        import inspect
-
-        frame = inspect.stack()[1]
-        search_path = [".", frame.filename]
+        search_path = _default_search_path()
     elif isinstance(search_path, Path):
         search_path = [search_path]
     elif isinstance(search_path, (str, bytes)):

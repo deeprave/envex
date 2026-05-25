@@ -17,6 +17,9 @@
 - `SecretsManager.set_secrets(path, values={})` is non-destructive; use `delete_secrets(path)` to delete a secret document explicitly.
 - `.env` `export` lines no longer bypass isolated environment mappings by writing directly to `os.environ`; global process updates remain controlled by `load_env(update=True)` or explicit `Env.export()`.
 - `Env.set(..., None)` now treats `None` as unset, and `Env.setdefault(..., None)` no longer stores `None`. Dict arguments passed to `Env(...)` use the same setter semantics, so `None` is not stringified as `"None"`.
+- `Env.int()` now parses signed integer strings correctly and raises `ValueError` for malformed non-empty integer values instead of silently returning `0`.
+- `Env(...)` now separates recognized loader/Vault options from additional environment-variable kwargs, so keyword environment overrides behave as documented.
+- Default `.env` discovery now uses a lightweight caller-frame lookup that skips envex-internal wrapper frames instead of relying on `inspect.stack()[1]`.
 - Test Vault container setup now avoids deprecated `testcontainers.vault.VaultContainer` imports, keeping warning-as-error test collection clean.
 - Documentation now uses the official HashiCorp Vault capitalization.
 
