@@ -130,9 +130,8 @@ def _process_line(_lineno: int, string: str, errors: bool, _env_path: Path | Non
                 _func = ENV_COMMANDS[command]
             except KeyError:
                 if errors:
-                    path = _env_path.as_posix() if _env_path else "stream"
                     print(
-                        f"unknown command {command} {path}({_lineno})",
+                        f"unknown command at line {_lineno}",
                         file=sys.stderr,
                     )
     return _func, unquote(_key), unquote(_val)
