@@ -109,6 +109,14 @@ def test_invalid_magic_bytes(encrypted_stream_with_invalid_magic_bytes, password
     assert "does not look to be encrypted" in str(e.value)
 
 
+def test_truncated_authenticated_stream_raises_decrypt_error(password):
+    encrypted_stream = BytesIO(env_crypto.AUTH_MAGIC_BYTES + b"too-short")
+
+    with pytest.raises(DecryptError) as e:
+        decrypt_data(encrypted_stream, password)
+    assert str(e.value) == "Incorrect password or invalid data"
+
+
 def test_invalid_password(incorrect_password, password):
     data = b"VALID_ENCRYPTED_DATA"
     encrypted_data = encrypt_data(BytesIO(data), password)
