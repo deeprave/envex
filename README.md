@@ -149,10 +149,35 @@ This is enforced by the underlying os.environ, but also true of any provided env
 ## Encrypted Environment Files
 
 To enhance security of environment files that exist on the filesystem `envex` supports the creation and use of authenticated AES-256-GCM encrypted files.
+Version 5.0.0 changes the encrypted file format from the legacy AES-CBC format to AES-GCM because the old format did not authenticate ciphertext and was vulnerable to padding-oracle style attacks if decryption failures were exposed.
+The new format authenticates encrypted data before returning plaintext and is not subject to that vulnerability.
 
 Encrypted `.env` files are named as `.env.enc` by default (strictly, `${DOTENV:-.env}.enc`), to distinguish them from the unencrypted version, but this is only by convention; both to distinguish the files visually, and to prevent other dot-env readers from using them.
 
 If the feature is enabled and a pass phrase is provided when the environment file is read, `envex` determines automatically if it contains encrypted data. If the `.enc` version of the environment file does not exist, the .env file - encrypted or not - is used as a fallback, but will otherwise be ignored.
+
+### Version 5 Encrypted File Compatibility
+
+This is a breaking encrypted-file format change:
+
+- Files encrypted by envex 5.0.0 and later cannot be decrypted by envex 4.x or older.
+- Envex 5.0.0 can still decrypt legacy AES-CBC files so existing files can be migrated.
+- Any file re-encrypted with envex 5.0.0 will require envex 5.0.0 or later to decrypt.
+
+To migrate an existing encrypted file, decrypt it with a version that can read the current file, then re-encrypt it with envex 5.0.0 or later:
+
+```shell
+envcrypt --decrypt --password "$PASSPHRASE" .env.enc .env
+envcrypt --encrypt --password "$PASSPHRASE" .env .env.enc
+```
+
+If the pass phrase is stored in an environment variable or file, use `--environ NAME` or `--file PATH` instead of `--password`.
+After migration, verify the new file can be decrypted by envex 5.0.0 or later and remove any temporary plaintext file:
+
+```shell
+envcrypt --decrypt --password "$PASSPHRASE" .env.enc .env.verify
+rm .env .env.verify
+```
 
 The `envcrypt` CLI utility supports the encryption and decryption of environment files.
 ```shell
