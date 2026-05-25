@@ -77,9 +77,8 @@ def main():
 
     args = parser.parse_args()
 
-    client = hvac.Client(
-        url=args.address, token=args.token, verify=expand(args.cacert) or False
-    )
+    verify = expand(args.cacert) if args.cacert else True
+    client = hvac.Client(url=args.address, token=args.token, verify=verify)
 
     try:
         if args.seal:
@@ -97,7 +96,7 @@ def main():
         status = client.seal_status
         print(
             trim_indent(
-                f"Vault Status: {'Sealed' if status['sealed'] == 'true' else 'Unsealed'} "
+                f"Vault Status: {'Sealed' if status['sealed'] else 'Unsealed'} "
                 f"type={status['type']} shares={status['t']}/{status['n']}"
             )
         )
