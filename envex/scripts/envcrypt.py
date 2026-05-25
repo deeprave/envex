@@ -116,6 +116,12 @@ def main():
     )
 
     parser.add_argument(
+        "--legacy",
+        action="store_true",
+        default=False,
+        help="Allow decrypting legacy AES-CBC files for migration",
+    )
+    parser.add_argument(
         "-r",
         "--rm",
         action="store_true",
@@ -164,6 +170,9 @@ def main():
             "{parser.prog}: operation to perform (--encrypt or --decrypt) must be specified"
         )
         exit(3)
+    if args.legacy and args.encrypt:
+        logger.error(f"{parser.prog}: --legacy can only be used with --decrypt")
+        exit(3)
 
     encrypt = args.encrypt
 
@@ -195,9 +204,14 @@ def main():
         f"{parser.prog}: {'encrypt' if encrypt else 'decrypt'} {_input} -> {_output}"
     )
 
-    func = encrypt_data if encrypt else decrypt_data
     try:
-        _output.write_bytes(func(BytesIO(_input.read_bytes()), _password).getvalue())
+        input_data = BytesIO(_input.read_bytes())
+        output_data = (
+            encrypt_data(input_data, _password)
+            if encrypt
+            else decrypt_data(input_data, _password, allow_legacy=args.legacy)
+        )
+        _output.write_bytes(output_data.getvalue())
     except DecryptError as e:
         logger.error(f"{parser.prog}: {e.args}")
         exit(4)

@@ -161,13 +161,14 @@ If the feature is enabled and a pass phrase is provided when the environment fil
 This is a breaking encrypted-file format change:
 
 - Files encrypted by envex 5.0.0 and later cannot be decrypted by envex 4.x or older.
-- Envex 5.0.0 can still decrypt legacy AES-CBC files so existing files can be migrated.
+- Envex 5.0.0 can still decrypt legacy AES-CBC files with explicit legacy mode so existing files can be migrated.
 - Any file re-encrypted with envex 5.0.0 will require envex 5.0.0 or later to decrypt.
+- Normal decryption rejects legacy AES-CBC files by default so a modified AES-GCM file cannot be downgraded into the unauthenticated legacy path.
 
 To migrate an existing encrypted file, decrypt it with a version that can read the current file, then re-encrypt it with envex 5.0.0 or later:
 
 ```shell
-envcrypt --decrypt --password "$PASSPHRASE" .env.enc .env
+envcrypt --decrypt --legacy --password "$PASSPHRASE" .env.enc .env
 envcrypt --encrypt --password "$PASSPHRASE" .env .env.enc
 ```
 
@@ -181,7 +182,7 @@ rm .env .env.verify
 
 The `envcrypt` CLI utility supports the encryption and decryption of environment files.
 ```shell
-usage: envcrypt.py [-h] [-P PASSWORD | -E ENVIRON | -F FILE] [-e | -d] [-r] [-v] input [output]
+usage: envcrypt.py [-h] [-P PASSWORD | -E ENVIRON | -F FILE] [-e | -d] [--legacy] [-r] [-v] input [output]
 
 envcrypt: File encrypt/decrypt (authenticated AES-256-GCM)
 
@@ -198,6 +199,7 @@ options:
 
 -e, --encrypt            Use given password (default: False)
 -d, --decrypt            Read password from provided environment variable (default: False)
+--legacy                 Allow decrypting legacy AES-CBC files for migration (default: False)
 
 -r, --rm                 Remove input file after successful conversion (default: False)
 -v, --verbose            Increase output verbosity (default: False)

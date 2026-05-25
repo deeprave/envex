@@ -2,10 +2,13 @@
 
 ### v5.0.0
 
-- :warning: BREAKING CHANGE: encrypted files created by envex now use authenticated AES-256-GCM instead of the legacy AES-CBC format.
+- ⚠️ BREAKING CHANGE ⚠️: encrypted files created by envex now use authenticated AES-256-GCM instead of the legacy AES-CBC format.
 - Files encrypted with envex 5.0.0 or later cannot be decrypted by envex 4.x or older. Envex 5.0.0 can still decrypt legacy AES-CBC files so they can be migrated.
+- Legacy AES-CBC decryption now requires explicit legacy mode during migration; normal decryption rejects legacy headers to prevent downgrade from authenticated AES-GCM into the unauthenticated legacy path.
 - The encryption format changed because the previous AES-CBC format did not authenticate ciphertext and could be vulnerable to padding-oracle style attacks if decryption errors were exposed.
-- To migrate existing files, decrypt the legacy `.env.enc` file with a version that can read it, then re-encrypt it with envex 5.0.0 or later using `envcrypt --decrypt ...` followed by `envcrypt --encrypt ...`.
+- To migrate existing files, decrypt the legacy `.env.enc` file with a version that can read it, then re-encrypt it with envex 5.0.0 or later using
+  - `envcrypt --decrypt --legacy ...`, followed by
+  - `envcrypt --encrypt ...`.
 
 ### v4.4.0
 
