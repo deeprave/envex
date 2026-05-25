@@ -34,7 +34,7 @@ class Env:
         url: str | None = None,
         token: str | None = None,
         cert=None,
-        verify: bool | str = True,
+        verify: bool | str | None = True,
         base_path: str | None = None,
         engine: str | None = None,
         mount_point: str | None = None,
@@ -60,7 +60,9 @@ class Env:
         @param url: (optional) vault url, default is $VAULT_ADDR
         @param token: (optional) vault token, default is $VAULT_TOKEN or ~/.vault-token
         @param cert: (optional) tuple (cert, key) or str path to client cert/key files
-        @param verify: (optional) bool | str whether to verify server cert or set ca cert path (default=True)
+        @param verify: (optional) bool | str | None whether to verify server cert,
+            set ca cert path, or derive verification from VAULT_SKIP_VERIFY when
+            None (default=True)
         @param base_path: (optional) str base path for secrets (default=None)
         @param engine: (optional) str vault secrets engine (default=None)
         @param mount_point: (optional) str vault secrets mount point (default=None, determined by engine)
