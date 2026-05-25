@@ -15,11 +15,11 @@ from envex.scripts import seal
 def test_seal_status_uses_boolean_value_and_default_verify(
     sealed, expected_status, monkeypatch, capsys
 ):
-    class FakeClient:
-        calls = []
+    calls = []
 
+    class FakeClient:
         def __init__(self, **kwargs):
-            self.calls.append(kwargs)
+            calls.append(kwargs)
             self.seal_status = {
                 "sealed": sealed,
                 "type": "shamir",
@@ -35,18 +35,18 @@ def test_seal_status_uses_boolean_value_and_default_verify(
 
     seal.main()
 
-    assert FakeClient.calls[-1]["verify"] is True
+    assert calls[-1]["verify"] is True
     assert capsys.readouterr().out.strip() == (
         f"Vault Status: {expected_status} type=shamir shares=3/5"
     )
 
 
 def test_seal_expands_cacert_path(monkeypatch, capsys):
-    class FakeClient:
-        calls = []
+    calls = []
 
+    class FakeClient:
         def __init__(self, **kwargs):
-            self.calls.append(kwargs)
+            calls.append(kwargs)
             self.seal_status = {
                 "sealed": False,
                 "type": "shamir",
@@ -72,5 +72,5 @@ def test_seal_expands_cacert_path(monkeypatch, capsys):
 
     seal.main()
 
-    assert FakeClient.calls[-1]["verify"] == "/tmp/envex-home/ca.pem"
+    assert calls[-1]["verify"] == "/tmp/envex-home/ca.pem"
     assert "Vault Status: Unsealed" in capsys.readouterr().out
