@@ -152,11 +152,19 @@ def test_env_kwargs_are_environment_values():
 
 
 def test_env_kwargs_are_not_forwarded_to_load_env(monkeypatch):
-    monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
+    captured_kwargs = {}
+
+    def fake_load_env(**kwargs):
+        captured_kwargs.update(kwargs)
+        return kwargs["environ"]
+
+    monkeypatch.setattr(envex.env_wrapper, "load_env", fake_load_env)
 
     env = envex.Env(readenv=True, update=False, environ={}, EXTRA_VALUE="extra")
 
     assert env["EXTRA_VALUE"] == "extra"
+    assert captured_kwargs["update"] is False
+    assert "EXTRA_VALUE" not in captured_kwargs
 
 
 def test_env_kwargs_override_loaded_env_values(monkeypatch):
@@ -179,6 +187,23 @@ def test_env_kwargs_override_stream_values():
     env = envex.Env(stream, environ={}, FOO="kwarg")
 
     assert env["FOO"] == "kwarg"
+
+
+def test_env_streams_kwarg_accepts_iterables():
+    def stream_values():
+        yield io.BytesIO(b"FIRST=one\n")
+        yield io.StringIO("SECOND=two\n")
+
+    env = envex.Env(streams=stream_values(), environ={})
+
+    assert env["FIRST"] == "one"
+    assert env["SECOND"] == "two"
+
+
+@pytest.mark.parametrize("streams", [object(), ["not a stream"]])
+def test_env_streams_kwarg_rejects_invalid_values(streams):
+    with pytest.raises(TypeError, match="streams must"):
+        envex.Env(streams=streams, environ={})
 
 
 def test_env_float(monkeypatch):
