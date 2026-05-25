@@ -688,6 +688,7 @@ def test_encrypted_stream_bytes2(password):
 
 
 def test_encrypted_stream_invalid_plaintext_fallback_decode_error(password):
+    # 0xff/0xfe/0xfa are invalid leading bytes in UTF-8.
     invalid_data = b"\xff\xfe\xfa=not-utf-8\n"
 
     with pytest.raises(UnicodeDecodeError):
