@@ -1,13 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-This optional module is used to interface envex with the hvac (Hashicorp Vault) library.
+This optional module is used to interface envex with the hvac (HashiCorp Vault) library.
 """
 
 import logging
 import os
 from typing import Any, Iterator
 
+from hvac.exceptions import InvalidPath
+
 __all__ = ("SecretsManager",)
+
+
+def _pem_file_contains(path: str | None, marker: str) -> bool:
+    if path is None or not os.path.isfile(path):
+        return False
+    with open(path, "r") as f:
+        return marker in f.read()
 
 
 def expand(path: str):
@@ -16,26 +25,21 @@ def expand(path: str):
 
 def read_pem(variable: str, is_key: bool = False):
     """
-    Get the value of the given environment variable and return it as a PEM string.
+    Get the path from the given environment variable if it points to a valid PEM file.
 
     @param variable: The name of the environment variable to retrieve.
     @param is_key: Whether the file is a cert key or not
-    @returns: The PEM string value of the environment variable if it looks valid.
+    @returns: The expanded file path if it looks valid.
     """
     value = os.getenv(variable)
     if value is not None:
         value = expand(value)
-        if os.path.isfile(value):
-            with open(value, "r") as f:
-                value = f.read()
-                intro = "PRIVATE KEY" if is_key else "BEGIN CERTIFICATE"
-                value = value if intro in value else None
+        intro = "PRIVATE KEY" if is_key else "BEGIN CERTIFICATE"
+        value = value if _pem_file_contains(value, intro) else None
     return value
 
 
 class SecretsManager:
-    hvac_disabled = False
-
     def __init__(
         self,
         url: str | None = None,
@@ -72,50 +76,58 @@ class SecretsManager:
         if isinstance(verify, str):
             verify = expand(verify)
         if cert is None:
-            cert = (
-                read_pem("VAULT_CLIENT_CERT", False),
-                read_pem("VAULT_CLIENT_KEY", True),
-            )
-            if cert[0] is None:
+            cert_path = read_pem("VAULT_CLIENT_CERT", False)
+            key_path = read_pem("VAULT_CLIENT_KEY", True)
+            cert_has_key = _pem_file_contains(cert_path, "PRIVATE KEY")
+            if cert_path and key_path:
+                cert = (cert_path, key_path)
+            elif cert_path and cert_has_key:
+                cert = cert_path
+            elif cert_path or key_path:
+                logging.warning(
+                    "Ignoring incomplete Vault client certificate configuration; "
+                    "VAULT_CLIENT_CERT must point to a valid PEM file containing "
+                    "both certificate and private key, or VAULT_CLIENT_CERT and "
+                    "VAULT_CLIENT_KEY must point to valid PEM files"
+                )
                 cert = None
         if base_path is None:
             base_path = os.getenv("VAULT_PATH", "")
         if not mount_point:
             mount_point = "secret"
         self._client: Any | None = None
-        if SecretsManager.hvac_disabled:
+        self.hvac_disabled = False
+        # noinspection PyBroadException
+        try:
+            import hvac
+
+            timeout = timeout or int(os.getenv("VAULT_TIMEOUT", "5"))
+
+            self._client: hvac.Client
+            self._client = hvac.Client(
+                url=url,
+                token=token,
+                cert=cert,
+                verify=verify,
+                timeout=timeout,
+                **kwargs,
+            )
+            if engine:
+                self._engine = engine.lower()
+                response = self._client.sys.list_mounted_secrets_engines()
+                for path, config in response["data"].items():
+                    if config["type"] == self._engine:
+                        mount_point = path
+                        break
+            else:
+                self._engine = None  # assume kv
+        except Exception as e:
+            msg = f"{e.__class__.__name__} secrets manager disabled: {e}"
+            logging.debug(msg)
+            self.hvac_disabled = True
             self._client = None
-        else:
-            # noinspection PyBroadException
-            try:
-                import hvac
-
-                timeout = timeout or int(os.getenv("VAULT_TIMEOUT", "5"))
-
-                self._client: hvac.Client
-                self._client = hvac.Client(
-                    url=url,
-                    token=token,
-                    cert=cert,
-                    verify=verify,
-                    timeout=timeout,
-                    **kwargs,
-                )
-                if engine:
-                    self._engine = engine.lower()
-                    response = self._client.sys.list_mounted_secrets_engines()
-                    for path, config in response["data"].items():
-                        if config["type"] == self._engine:
-                            mount_point = path
-                            break
-                else:
-                    self._engine = None  # assume kv
-            except Exception as e:
-                msg = f"{e.__class__.__name__} secrets manager disabled: {e}"
-                logging.debug(msg)
-                SecretsManager.hvac_disabled = True
-                self._client = None
-        self._base_path = self.join(mount_point, "data", base_path)
+        self._mount_point = mount_point.strip("/")
+        self._base_path = self.join(base_path)
         self._secrets = {}
 
     @staticmethod
@@ -126,8 +138,17 @@ class SecretsManager:
     def base_path(self) -> str:
         return self._base_path
 
+    @property
+    def mount_point(self) -> str:
+        return self._mount_point
+
     def path(self, key) -> str:
         return self.join(self.base_path, key)
+
+    @property
+    def kv2(self):
+        client = self.client
+        return client.secrets.kv.v2 if client else None
 
     @property
     def client(self):
@@ -146,23 +167,38 @@ class SecretsManager:
         return self._secrets
 
     def get_secrets(self, path: str = "") -> dict:
-        if self.client:
-            response = self.client.read(self.path(path))
+        kv2 = self.kv2
+        if kv2:
+            try:
+                response = kv2.read_secret_version(
+                    path=self.path(path),
+                    mount_point=self.mount_point,
+                    raise_on_deleted_version=True,
+                )
+            except InvalidPath:
+                self._secrets = {}
+                return self.secrets
             if response is not None and "data" in response:
                 self._secrets = response["data"].get("data", {})
         return self.secrets
 
     def set_secrets(self, path: str = "", values: dict | None = None):
-        if self.client and values:
+        kv2 = self.kv2
+        if kv2 and values:
             self._secrets |= values
             if self.secrets:
-                self.client.write(self.path(path), data=self.secrets)
-            else:
-                self.client.delete(self.path(path))
+                kv2.create_or_update_secret(
+                    path=self.path(path),
+                    secret=self.secrets,
+                    mount_point=self.mount_point,
+                )
 
     def delete_secrets(self, path: str = "") -> None:
-        if self.client:
-            self.client.delete(self.path(path))
+        kv2 = self.kv2
+        if kv2:
+            kv2.delete_metadata_and_all_versions(
+                path=self.path(path), mount_point=self.mount_point
+            )
         self._secrets.clear()
 
     def get_secret(self, key: str, default: str | None = None, error: bool = False):
@@ -178,22 +214,34 @@ class SecretsManager:
         return default
 
     def set_secret(self, key: str, value: str):
-        if self.client and not any((key is None, value is None)):
+        kv2 = self.kv2
+        if kv2 and not any((key is None, value is None)):
             if not self.secrets:
                 self.get_secrets()
             self.secrets[key] = value
-            self.client.write_data(self.path(""), data=dict(data=self.secrets))
+            kv2.create_or_update_secret(
+                path=self.path(""),
+                secret=dict(self.secrets),
+                mount_point=self.mount_point,
+            )
 
     def delete_secret(self, key: str, path: str = "") -> None:
-        if self.client:
+        kv2 = self.kv2
+        if kv2:
             if not self.secrets:
                 self.get_secrets()
             if self.secrets and key in self.secrets:
                 del self.secrets[key]
                 if self.secrets:
-                    self.client.write_data(self.path(path), data=dict(data=self.secrets))
+                    kv2.create_or_update_secret(
+                        path=self.path(path),
+                        secret=dict(self.secrets),
+                        mount_point=self.mount_point,
+                    )
                 else:
-                    self.client.delete(self.path(path))
+                    kv2.delete_metadata_and_all_versions(
+                        path=self.path(path), mount_point=self.mount_point
+                    )
                     self.secrets.clear()
 
     def list_secrets(self, path: str = "") -> Iterator[str]:

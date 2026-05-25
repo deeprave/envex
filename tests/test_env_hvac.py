@@ -1,285 +1,343 @@
 # -*- coding: utf-8 -*-
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 
+import hvac
 import pytest
+from hvac.exceptions import InvalidPath
 
-from envex.env_hvac import SecretsManager
+from envex.env_hvac import SecretsManager, read_pem
 
-# Constants for testing
 BASE_URL = "http://vault.example.com:8200"
 TOKEN = "s.1234567890abcdef"
 CERT = ("path/to/cert.pem", "path/to/key.pem")
-VERIFY = True
 BASE_PATH = "base/path"
-ENGINE = "kv"
-MOUNT_POINT = "secret"
 
 
-@pytest.fixture
-def mock_init_client():
-    # Mock the hvac.Client class
-    class MockClient:
-        def __init__(self, *args, **kwargs):
-            self.authenticated = True
-            self.secrets = {}
-            self.seal_status = {"sealed": False}
+class FakeKvV2:
+    def __init__(self, initial=None):
+        self.store = dict(initial or {})
+        self.read_calls = []
+        self.write_calls = []
+        self.delete_calls = []
 
-        def is_authenticated(self):
-            return self.authenticated
+    def read_secret_version(self, path, version=None, mount_point="secret", **kwargs):
+        self.read_calls.append(
+            {
+                "path": path,
+                "version": version,
+                "mount_point": mount_point,
+                "kwargs": kwargs,
+            }
+        )
+        secret = self.store.get((mount_point, path))
+        return {"data": {"data": dict(secret)}} if secret is not None else {}
 
-        def read(self, path):
-            return {"data": {"data": self.secrets.get(path)}}
+    def create_or_update_secret(self, path, secret, cas=None, mount_point="secret"):
+        self.write_calls.append(
+            {
+                "path": path,
+                "secret": dict(secret),
+                "cas": cas,
+                "mount_point": mount_point,
+            }
+        )
+        self.store[(mount_point, path)] = dict(secret)
 
-        def write(self, path, **kwargs):
-            self.secrets[path] = kwargs
-
-        def delete(self, path):
-            self.secrets.pop(path, None)
-
-        def sys(self):
-            return MagicMock(
-                list_mounted_secrets_engines=MagicMock(return_value={"data": {}})
-            )
-
-    with patch("hvac.Client", new=MockClient):
-        yield MockClient()
-
-
-test_params = [
-    # ID: Happy-Path-1
-    (
-        BASE_URL,
-        TOKEN,
-        CERT,
-        VERIFY,
-        BASE_PATH,
-        ENGINE,
-        MOUNT_POINT,
-        SecretsManager.join(MOUNT_POINT, "data", BASE_PATH),
-    ),
-    # ID: Happy-Path-2
-    (
-        BASE_URL,
-        TOKEN,
-        None,
-        VERIFY,
-        None,
-        None,
-        None,
-        SecretsManager.join("secret", "data"),
-    ),
-    # ID: Edge-Case-1
-    (
-        BASE_URL,
-        TOKEN,
-        CERT,
-        "/path/to/ca.pem",
-        BASE_PATH,
-        ENGINE,
-        MOUNT_POINT,
-        SecretsManager.join(MOUNT_POINT, "data", BASE_PATH),
-    ),
-    # ID: Error-Case-1
-    (
-        None,
-        None,
-        None,
-        VERIFY,
-        BASE_PATH,
-        ENGINE,
-        MOUNT_POINT,
-        SecretsManager.join(MOUNT_POINT, "data", BASE_PATH),
-    ),
-]
+    def delete_metadata_and_all_versions(self, path, mount_point="secret"):
+        self.delete_calls.append({"path": path, "mount_point": mount_point})
+        self.store.pop((mount_point, path), None)
 
 
-@pytest.mark.vault
+class FakeClient:
+    def __init__(self, kv2=None, mounts=None, authenticated=True):
+        self.authenticated = authenticated
+        self.seal_status = {"sealed": False}
+        self.secrets = SimpleNamespace(kv=SimpleNamespace(v2=kv2 or FakeKvV2()))
+        self._mounts = mounts or {"secret/": {"type": "kv"}}
+
+    def is_authenticated(self):
+        return self.authenticated
+
+    @property
+    def sys(self):
+        return SimpleNamespace(
+            list_mounted_secrets_engines=lambda: {"data": self._mounts},
+            seal=self._seal,
+            submit_unseal_keys=self._submit_unseal_keys,
+        )
+
+    def _seal(self):
+        self.seal_status["sealed"] = True
+        return self.seal_status
+
+    def _submit_unseal_keys(self, keys, root_token):
+        self.seal_status["sealed"] = False
+        return self.seal_status
+
+
+def make_manager(base_path="", mount_point="secret", kv2=None):
+    manager = SecretsManager.__new__(SecretsManager)
+    manager._client = FakeClient(kv2=kv2)
+    manager.hvac_disabled = False
+    manager._engine = None
+    manager._mount_point = mount_point
+    manager._base_path = SecretsManager.join(base_path)
+    manager._secrets = {}
+    return manager
+
+
+def install_fake_hvac_client(monkeypatch, mounts=None):
+    instances = []
+
+    class InitClient(FakeClient):
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            instances.append(self)
+            super().__init__(mounts=mounts)
+
+    monkeypatch.setattr(hvac, "Client", InitClient)
+    return instances
+
+
 @pytest.mark.parametrize(
-    "url, token, cert, verify, base_path, engine, mount_point, expected_base_path",
-    test_params,
+    ("base_path", "engine", "mount_point", "mounts", "expected_base", "expected_mount"),
+    [
+        (BASE_PATH, None, "secret", None, BASE_PATH, "secret"),
+        (None, None, None, None, "", "secret"),
+        (
+            BASE_PATH,
+            "kv",
+            None,
+            {"custom/": {"type": "kv"}},
+            BASE_PATH,
+            "custom",
+        ),
+    ],
 )
-def test_secrets_manager_initialization(
-    url,
-    token,
-    cert,
-    verify,
+def test_secrets_manager_initialization_uses_logical_paths(
     base_path,
     engine,
     mount_point,
-    expected_base_path,
-    mock_init_client,
+    mounts,
+    expected_base,
+    expected_mount,
+    monkeypatch,
 ):
-    # Arrange
-    with patch("envex.env_hvac.os.getenv", side_effect=lambda k, v=None: v):
-        with patch("envex.env_hvac.expand", side_effect=lambda v: v):
-            with patch("envex.env_hvac.read_pem", side_effect=lambda k, req: None):
-                # Act
-                manager = SecretsManager(
-                    url=url,
-                    token=token,
-                    cert=cert,
-                    verify=verify,
-                    base_path=base_path,
-                    engine=engine,
-                    mount_point=mount_point,
-                )
+    monkeypatch.delenv("VAULT_PATH", raising=False)
+    instances = install_fake_hvac_client(monkeypatch, mounts=mounts)
 
-                # Assert
-                assert manager.base_path == expected_base_path
+    manager = SecretsManager(
+        url=BASE_URL,
+        token=TOKEN,
+        cert=CERT,
+        verify=True,
+        base_path=base_path,
+        engine=engine,
+        mount_point=mount_point,
+    )
 
-
-# Fixture to create a mock client and attach it to the object under test
-@pytest.fixture
-def secrets_manager():
-    # Mock class to simulate the client's behaviour
-    class MockClient:
-        seal_status = {"sealed": False}
-
-        def read(self, path):
-            mock_responses = {
-                "secret/data/valid/path": {
-                    "data": {"data": {"secret_key": "secret_value"}}
-                },
-                "secret/data/valid/empty": {"data": {"data": {}}},
-                "secret/data/no/data": {},
-                None: None,
-            }
-            return mock_responses.get(path)
-
-        def write(self, path, **kwargs):
-            pass
-
-        def write_data(self, path, **kwargs):
-            pass
-
-        def delete(self, path):
-            pass
-
-        @property
-        def sys(self):
-            class Sys:
-                def seal(self):
-                    MockClient.seal_status["sealed"] = True
-                    return MockClient.seal_status
-
-                def unseal(self, keys, root_token):
-                    MockClient.seal_status["sealed"] = False
-                    return MockClient.seal_status
-
-                def submit_unseal_keys(self, keys, root_token):
-                    MockClient.seal_status["sealed"] = False
-                    return MockClient.seal_status
-
-            return Sys()
-
-    class SecretsManagerEx(SecretsManager):
-        def __init__(self):
-            super().__init__()
-            self._client = None
-
-        @property
-        def client(self):
-            if not self._client:
-                self._client = MockClient()
-            return self._client
-
-    return SecretsManagerEx()
+    assert instances[0].kwargs["cert"] == CERT
+    assert manager.base_path == expected_base
+    assert manager.mount_point == expected_mount
+    assert manager.path("app/prod") == SecretsManager.join(expected_base, "app/prod")
 
 
-# Parametrized test cases
-@pytest.mark.vault
+def test_initialization_failure_is_instance_local(monkeypatch):
+    calls = 0
+
+    def fake_client(**kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("temporary import/auth setup failure")
+        return FakeClient()
+
+    monkeypatch.setattr(hvac, "Client", fake_client)
+
+    failed = SecretsManager()
+    working = SecretsManager()
+
+    assert failed.hvac_disabled
+    assert failed.client is None
+    assert not working.hvac_disabled
+    assert working.client is working._client
+
+
 @pytest.mark.parametrize(
-    "test_input, test_input_key, expected_output, test_id",
+    ("env_name", "contents", "is_key"),
     [
-        # Happy path tests with various realistic test values
-        (
-            "valid/path",
-            "secret_key",
-            {"secret_key": "secret_value"},
-            "happy_path_valid_data",
-        ),
-        ("valid/empty", "secret_key", {}, "happy_path_empty_data"),
-        # Edge cases
-        ("", "", {}, "edge_case_no_path"),
-        ("no/data", "", {}, "edge_case_no_data_in_response"),
-        # Error cases
-        (None, None, {}, "error_case_none_path"),
+        ("VAULT_CLIENT_CERT", "-----BEGIN CERTIFICATE-----\n", False),
+        ("VAULT_CLIENT_KEY", "-----BEGIN PRIVATE KEY-----\n", True),
     ],
 )
-def test_get_secrets(
-    secrets_manager, test_input, test_input_key, expected_output, test_id
+def test_read_pem_returns_valid_file_path(
+    tmp_path, monkeypatch, env_name, contents, is_key
 ):
-    # Act
-    result = secrets_manager.get_secrets(test_input)
+    pem_file = tmp_path / f"{env_name}.pem"
+    pem_file.write_text(contents)
+    monkeypatch.setenv(env_name, pem_file.as_posix())
 
-    # Assert
-    assert result == expected_output, (
-        f"get_secrets({test_input}) failed for test_id: {test_id}"
-    )
-
-    # Act
-    result = secrets_manager.get_secret(test_input_key)
-
-    # Assert
-    assert result == expected_output.get(test_input_key, None), (
-        f"get_secret({test_input_key}) failed for test_id: {test_id}"
-    )
-
-    # Act
-    secrets_manager.delete_secrets(test_input)
-
-    assert secrets_manager.secrets == {}
+    assert read_pem(env_name, is_key=is_key) == pem_file.as_posix()
 
 
-@pytest.mark.vault
-@pytest.mark.parametrize(
-    "test_input_key, expected_inital_output, modified_value, test_id",
-    [
-        # Happy path tests with various test values
-        (
-            "not_a_secret_key",
-            None,
-            "new_value",
-            "happy_path_valid_data",
-        ),
-        ("secret_key", None, None, "happy_path_empty_data"),
-        # Edge cases
-        ("", None, None, "edge_case_no_path"),
-        ("", None, None, "edge_case_no_data_in_response"),
-        # Error cases
-        (None, None, None, "error_case_none_path"),
-    ],
-)
-def test_get_set_secret(
-    secrets_manager, test_input_key, expected_inital_output, modified_value, test_id
+def test_read_pem_rejects_inline_or_invalid_pem(tmp_path, monkeypatch):
+    pem_file = tmp_path / "invalid.pem"
+    pem_file.write_text("not a certificate")
+    monkeypatch.setenv("INLINE_PEM", "-----BEGIN CERTIFICATE-----\n")
+    monkeypatch.setenv("INVALID_PEM", pem_file.as_posix())
+
+    assert read_pem("INLINE_PEM") is None
+    assert read_pem("INVALID_PEM") is None
+
+
+def test_client_certificate_env_vars_are_passed_as_paths(tmp_path, monkeypatch):
+    cert = tmp_path / "client.pem"
+    key = tmp_path / "client-key.pem"
+    cert.write_text("-----BEGIN CERTIFICATE-----\n")
+    key.write_text("-----BEGIN PRIVATE KEY-----\n")
+    monkeypatch.setenv("VAULT_CLIENT_CERT", cert.as_posix())
+    monkeypatch.setenv("VAULT_CLIENT_KEY", key.as_posix())
+    instances = install_fake_hvac_client(monkeypatch)
+
+    SecretsManager()
+
+    assert instances[0].kwargs["cert"] == (cert.as_posix(), key.as_posix())
+
+
+def test_combined_client_certificate_file_is_passed_as_single_path(
+    tmp_path, monkeypatch, caplog
 ):
-    result = secrets_manager.get_secret(test_input_key)
-    assert result == expected_inital_output, (
-        f"get_secret({test_input_key}) failed for test_id: {test_id}"
-    )
+    cert = tmp_path / "client-combined.pem"
+    cert.write_text("-----BEGIN CERTIFICATE-----\n-----BEGIN PRIVATE KEY-----\n")
+    monkeypatch.setenv("VAULT_CLIENT_CERT", cert.as_posix())
+    monkeypatch.delenv("VAULT_CLIENT_KEY", raising=False)
+    instances = install_fake_hvac_client(monkeypatch)
 
-    secrets_manager.set_secret(test_input_key, modified_value)
-    result = secrets_manager.get_secret(test_input_key)
-    assert result == modified_value, (
-        f"get_secret({test_input_key}) failed for test_id: {test_id}"
-    )
+    SecretsManager()
 
-    result = list(secrets_manager.list_secrets())
-    expected_result = [test_input_key] if modified_value else []
-    assert result == expected_result, f"list_secrets() failed for test_id: {test_id}"
-
-    secrets_manager.delete_secret(test_input_key)
-    assert secrets_manager.secrets == {}, (
-        f"delete_secret({test_input_key}) failed for test_id: {test_id}"
-    )
-
-    result = list(secrets_manager.list_secrets())
-    assert not result
+    assert instances[0].kwargs["cert"] == cert.as_posix()
+    assert "Ignoring incomplete Vault client certificate configuration" not in caplog.text
 
 
-@pytest.mark.vault
-def test_seal_unseal(secrets_manager):
-    secrets_manager.seal()
-    assert secrets_manager.sealed
-    secrets_manager.unseal(None, None)
-    assert not secrets_manager.sealed
+def test_client_certificate_env_vars_require_cert_and_key(tmp_path, monkeypatch, caplog):
+    cert = tmp_path / "client.pem"
+    cert.write_text("-----BEGIN CERTIFICATE-----\n")
+    monkeypatch.setenv("VAULT_CLIENT_CERT", cert.as_posix())
+    monkeypatch.delenv("VAULT_CLIENT_KEY", raising=False)
+    instances = install_fake_hvac_client(monkeypatch)
+
+    SecretsManager()
+
+    assert instances[0].kwargs["cert"] is None
+    assert "Ignoring incomplete Vault client certificate configuration" in caplog.text
+
+
+def test_get_secrets_uses_kv_v2_read_with_mount_and_logical_path():
+    kv2 = FakeKvV2({("custom", "base/app"): {"secret_key": "secret_value"}})
+    manager = make_manager(base_path="base", mount_point="custom", kv2=kv2)
+
+    assert manager.get_secrets("app") == {"secret_key": "secret_value"}
+
+    assert kv2.read_calls == [
+        {
+            "path": "base/app",
+            "version": None,
+            "mount_point": "custom",
+            "kwargs": {"raise_on_deleted_version": True},
+        }
+    ]
+
+
+def test_get_secrets_treats_missing_kv_path_as_empty():
+    class MissingKvV2(FakeKvV2):
+        def read_secret_version(self, path, version=None, mount_point="secret", **kwargs):
+            super().read_secret_version(path, version, mount_point, **kwargs)
+            raise InvalidPath("missing secret")
+
+    kv2 = MissingKvV2()
+    manager = make_manager(kv2=kv2)
+    manager._secrets = {"OLD": "stale"}
+
+    assert manager.get_secrets("missing") == {}
+
+
+def test_set_secrets_uses_kv_v2_write_with_mount_and_logical_path():
+    kv2 = FakeKvV2()
+    manager = make_manager(base_path="base", mount_point="custom", kv2=kv2)
+    manager._secrets = {"EXISTING": "keep"}
+
+    manager.set_secrets("app", values={"PUBLIC": "hello"})
+
+    assert kv2.write_calls == [
+        {
+            "path": "base/app",
+            "secret": {"EXISTING": "keep", "PUBLIC": "hello"},
+            "cas": None,
+            "mount_point": "custom",
+        }
+    ]
+
+
+def test_set_secrets_with_empty_values_is_not_destructive():
+    kv2 = FakeKvV2({("secret", "base/app"): {"PUBLIC": "hello"}})
+    manager = make_manager(base_path="base", kv2=kv2)
+    manager._secrets = {}
+
+    manager.set_secrets("app", values={})
+
+    assert kv2.write_calls == []
+    assert kv2.delete_calls == []
+    assert kv2.store == {("secret", "base/app"): {"PUBLIC": "hello"}}
+
+
+def test_delete_secrets_uses_kv_v2_metadata_delete():
+    kv2 = FakeKvV2({("secret", "base/app"): {"PUBLIC": "hello"}})
+    manager = make_manager(base_path="base", kv2=kv2)
+    manager._secrets = {"PUBLIC": "hello"}
+
+    manager.delete_secrets("app")
+
+    assert kv2.delete_calls == [{"path": "base/app", "mount_point": "secret"}]
+    assert manager.secrets == {}
+
+
+def test_get_set_list_and_delete_secret():
+    kv2 = FakeKvV2({("secret", "base"): {"ABC": "123", "DEF": "456"}})
+    manager = make_manager(base_path="base", kv2=kv2)
+
+    assert manager.get_secret("ABC") == "123"
+
+    manager.set_secret("XYZ", "789")
+    assert manager.get_secret("XYZ") == "789"
+    assert list(manager.list_secrets()) == ["ABC", "DEF", "XYZ"]
+    assert kv2.write_calls[-1] == {
+        "path": "base",
+        "secret": {"ABC": "123", "DEF": "456", "XYZ": "789"},
+        "cas": None,
+        "mount_point": "secret",
+    }
+
+    manager.delete_secret("XYZ")
+    assert "XYZ" not in manager.secrets
+    assert kv2.write_calls[-1]["secret"] == {"ABC": "123", "DEF": "456"}
+
+
+def test_delete_secret_removes_empty_vault_document():
+    kv2 = FakeKvV2({("secret", "base"): {"ABC": "123"}})
+    manager = make_manager(base_path="base", kv2=kv2)
+
+    assert manager.get_secret("ABC") == "123"
+
+    manager.delete_secret("ABC")
+
+    assert manager.secrets == {}
+    assert kv2.delete_calls == [{"path": "base", "mount_point": "secret"}]
+
+
+def test_seal_unseal():
+    manager = make_manager()
+
+    manager.seal()
+    assert manager.sealed
+    manager.unseal([], None)
+    assert not manager.sealed
