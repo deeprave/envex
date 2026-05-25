@@ -171,24 +171,8 @@ def create_or_update_secrets(secrets, key, cert, verbose):
         )
 
 
-def main(args):
-    search = args.search.split(",") if args.search else None
-    env = read_env(args.dotenv, search=search, parents=args.parents, useenv=args.environ)
-    data = parse_template(env, args.template, args.comments)
-    rendered = subst(env, data)
-    if secrets := output_result(rendered, args.output, args.empty):
-        create_or_update_secrets(secrets, args.key, args.cert, args.verbose)
-
-
-def error(message, exitcode=None):
-    print(f"{'ERROR' if exitcode else 'WARNING'}: {message}", file=sys.stderr)
-    if exitcode is not None:
-        exit(exitcode)
-
-
-if __name__ == "__main__":
-    prog = Path(sys.argv[0]).resolve(strict=True)
-    parser = argparse.ArgumentParser(prog=prog.name, description=__doc__)
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="envsecrets", description=__doc__)
 
     scripts = Path(__file__).parent
     dotenv_default = ".env"
@@ -272,8 +256,30 @@ if __name__ == "__main__":
         default=output_default,
         help=f'output to this file (default="{output_default}")',
     )
+    return parser
 
-    argv = parser.parse_args()
-    # print(argv)
 
-    main(argv)
+def run(args: argparse.Namespace) -> None:
+    search = args.search.split(",") if args.search else None
+    env = read_env(args.dotenv, search=search, parents=args.parents, useenv=args.environ)
+    data = parse_template(env, args.template, args.comments)
+    rendered = subst(env, data)
+    if secrets := output_result(rendered, args.output, args.empty):
+        create_or_update_secrets(secrets, args.key, args.cert, args.verbose)
+
+
+def main(argv: list[str] | argparse.Namespace | None = None) -> None:
+    args = (
+        argv if isinstance(argv, argparse.Namespace) else build_parser().parse_args(argv)
+    )
+    run(args)
+
+
+def error(message, exitcode=None):
+    print(f"{'ERROR' if exitcode else 'WARNING'}: {message}", file=sys.stderr)
+    if exitcode is not None:
+        exit(exitcode)
+
+
+if __name__ == "__main__":
+    main()
