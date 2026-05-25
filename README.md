@@ -148,7 +148,7 @@ This is enforced by the underlying os.environ, but also true of any provided env
 
 ## Encrypted Environment Files
 
-To enhance security of environment files that exist on the filesystem `envex` supports the creation and use of AES-256 encrypted files.
+To enhance security of environment files that exist on the filesystem `envex` supports the creation and use of authenticated AES-256-GCM encrypted files.
 
 Encrypted `.env` files are named as `.env.enc` by default (strictly, `${DOTENV:-.env}.enc`), to distinguish them from the unencrypted version, but this is only by convention; both to distinguish the files visually, and to prevent other dot-env readers from using them.
 
@@ -158,7 +158,7 @@ The `envcrypt` CLI utility supports the encryption and decryption of environment
 ```shell
 usage: envcrypt.py [-h] [-P PASSWORD | -E ENVIRON | -F FILE] [-e | -d] [-r] [-v] input [output]
 
-envcrypt: File encrypt/decrypt (AES-256-CBC with HMAC-SHA256)
+envcrypt: File encrypt/decrypt (authenticated AES-256-GCM)
 
 positional arguments:
 input                    File to encrypt or decrypt

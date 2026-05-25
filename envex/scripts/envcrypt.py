@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-File encrypt/decrypt (AES-256-CBC with HMAC-SHA256)
+File encrypt/decrypt (authenticated AES-256-GCM)
 """
 
 import os

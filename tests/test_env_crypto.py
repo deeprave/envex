@@ -3,6 +3,7 @@
 from io import BytesIO, StringIO
 
 import pytest
+import envex.env_crypto as env_crypto
 from envex.env_crypto import encrypt_data, decrypt_data, EncryptError, DecryptError
 
 
@@ -29,6 +30,7 @@ def test_encrypt_data_success(password):
     result = encrypt_data(input_data, password)
     assert isinstance(result, BytesIO)
     assert result.getvalue() != b"test data"  # Ensure data is encrypted
+    assert result.getvalue().startswith(env_crypto.AUTH_MAGIC_BYTES)
 
 
 def test_encrypt_decrypt_unicode_(password):
@@ -79,6 +81,16 @@ def test_valid_decryption(password):
     assert result.getvalue() == b"VALID_ENCRYPTED_DATA"
 
 
+def test_tampered_ciphertext_fails_authentication(password):
+    encrypted_data = bytearray(
+        encrypt_data(BytesIO(b"VALID_ENCRYPTED_DATA"), password).getvalue()
+    )
+    encrypted_data[-1] ^= 1
+    with pytest.raises(DecryptError) as e:
+        decrypt_data(BytesIO(encrypted_data), password)
+    assert str(e.value) == "Incorrect password or invalid data"
+
+
 def test_invalid_magic_bytes(encrypted_stream_with_invalid_magic_bytes, password):
     # Ensure decryption fails on invalid magic bytes
     with pytest.raises(DecryptError) as e:
@@ -93,6 +105,32 @@ def test_invalid_password(incorrect_password, password):
     with pytest.raises(DecryptError) as e:
         decrypt_data(encrypted_data, incorrect_password)
     assert "Incorrect password or invalid data" in str(e.value)
+
+
+def legacy_encrypt_data(data: bytes, password: str) -> BytesIO:
+    salt = b"salt_for_tests_1"
+    iv = b"iv_for_tests__01"
+    key, _ = env_crypto.generate_key_from_password(password, salt)
+    cipher = env_crypto.AES.new(key, env_crypto.AES.MODE_CBC, iv)
+    return BytesIO(
+        env_crypto.MAGIC_BYTES + salt + iv + cipher.encrypt(env_crypto._pad(data))
+    )
+
+
+def test_legacy_cbc_decryption_remains_supported(password):
+    encrypted_data = legacy_encrypt_data(b"LEGACY_ENCRYPTED_DATA", password)
+    result = decrypt_data(encrypted_data, password)
+    assert result.getvalue() == b"LEGACY_ENCRYPTED_DATA"
+
+
+def test_legacy_cbc_padding_failures_are_generic(password):
+    encrypted_data = bytearray(
+        legacy_encrypt_data(b"LEGACY_ENCRYPTED_DATA", password).getvalue()
+    )
+    encrypted_data[-1] ^= 1
+    with pytest.raises(DecryptError) as e:
+        decrypt_data(BytesIO(encrypted_data), password)
+    assert str(e.value) == "Incorrect password or invalid data"
 
 
 def test_empty_stream(password):
