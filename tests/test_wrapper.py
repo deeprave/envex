@@ -159,6 +159,28 @@ def test_env_kwargs_are_not_forwarded_to_load_env(monkeypatch):
     assert env["EXTRA_VALUE"] == "extra"
 
 
+def test_env_kwargs_override_loaded_env_values(monkeypatch):
+    monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
+
+    env = envex.Env(
+        readenv=True,
+        update=False,
+        overwrite=True,
+        environ={},
+        INTVALUE=999,
+    )
+
+    assert env["INTVALUE"] == "999"
+
+
+def test_env_kwargs_override_stream_values():
+    stream = io.BytesIO(b"FOO=stream\n")
+
+    env = envex.Env(stream, environ={}, FOO="kwarg")
+
+    assert env["FOO"] == "kwarg"
+
+
 def test_env_float(monkeypatch):
     monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
     env = envex.Env(readenv=True)

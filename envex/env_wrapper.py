@@ -107,8 +107,6 @@ class Env:
             key: kwargs.pop(key) for key in list(kwargs) if key in self._LOAD_ENV_KWARGS
         }
 
-        self.set(kwargs)
-
         password = self._resolve_password(
             load_env_kwargs.get("password", None), load_env_kwargs.get("decrypt", None)
         )
@@ -119,6 +117,7 @@ class Env:
         if readenv:
             self.read_env(**load_env_kwargs)
         self.read_streams(*streams, **load_env_kwargs)
+        self.set(kwargs)
         self.env_source = self.env.get("ENVEX_SOURCE", "env") == "env"
         vault_verify = (
             verify
