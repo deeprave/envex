@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 # ENV EXtended
 
-`envex` is a dotenv `.env` aware environment variable handler with typing features and Hashicorp vault support.
+`envex` is a dotenv `.env` aware environment variable handler with typing features and HashiCorp Vault support.
 
 ## Overview
 
@@ -31,8 +31,8 @@ Using encrypted environment files avoids using plain text files on the filesyste
 The provided `envcrypt` utility conveniently allows conversion between encrypted and non-encrypted formats.
 
 #### Vault support
-Alternatively, `envex` provides seamless integration with Hashicorp Vault. This reduces the need to store plaintext secrets on the filesystem and provides a more secure approach for managing secrets.
-Hashicorp vault functionality is optional, and is activated automatically when the `hvac` module is installed into the active virtual environment, and where connection and authentication to Vault succeed.
+Alternatively, `envex` provides seamless integration with HashiCorp Vault. This reduces the need to store plaintext secrets on the filesystem and provides a more secure approach for managing secrets.
+HashiCorp Vault functionality is optional, and is activated automatically when the `hvac` module is installed into the active virtual environment, and where connection and authentication to Vault succeed.
 Values fetched from Vault are cached by default to reduce the overhead of the api call.
 If this is of concern, caching can be disabled using the`enable_cache=False` parameter to Env.
 
@@ -237,7 +237,7 @@ Also, encrypted .env files are not available to other .env aware software.
 
 ## Vault
 
-In addition to handling of the os environment and .env files - encrypted or plain text - `envex` supports selectively fetching secrets from Hashicorp Vault using the kv.v2 engine.
+In addition to handling of the os environment and .env files - encrypted or plain text - `envex` supports selectively fetching secrets from HashiCorp Vault using the kv.v2 engine.
 This provides a secure secrets store, and completely avoids exposing secrets in plain text on the filesystem and in particular in published docker images.
 It also prevents storing secrets in the operating system’s environment, which can be inspected by external processes.
 
