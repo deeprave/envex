@@ -12,6 +12,7 @@
 - ⚠️ BREAKING CHANGE ⚠️: `SecretsManager.base_path` and `SecretsManager.path()` now represent logical KV v2 secret paths instead of raw Vault API paths such as `secret/data/...`. Direct `SecretsManager` users that passed or compared raw API paths should migrate to logical paths and use `mount_point` for the Vault secrets engine mount, which defaults to `secret/`.
 - Vault secret reads, writes, and deletes now use hvac's KV v2 API instead of raw `client.read()`, `client.write()`, and `client.delete()` calls. This improves behavior with namespaces and non-standard mount points.
 - `SecretsManager` Vault initialization failures are now instance-local; one transient failure no longer disables Vault lookups for all later instances in the process.
+- The optional Vault integration remains importable when `hvac` is not installed.
 - Vault client certificate environment handling now validates PEM files and passes file paths to hvac/requests. `VAULT_CLIENT_CERT` may point to a combined certificate/key PEM file, or `VAULT_CLIENT_CERT` and `VAULT_CLIENT_KEY` may point to separate files. Incomplete client certificate configuration now logs a warning.
 - `SecretsManager.set_secrets(path, values={})` is non-destructive; use `delete_secrets(path)` to delete a secret document explicitly.
 - `.env` `export` lines no longer bypass isolated environment mappings by writing directly to `os.environ`; global process updates remain controlled by `load_env(update=True)` or explicit `Env.export()`.

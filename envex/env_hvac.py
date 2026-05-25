@@ -7,9 +7,15 @@ import logging
 import os
 from typing import Any, Iterator
 
-from hvac.exceptions import InvalidPath
-
 __all__ = ("SecretsManager",)
+
+
+def _is_invalid_path(exc: Exception) -> bool:
+    try:
+        from hvac.exceptions import InvalidPath
+    except ImportError:
+        return False
+    return isinstance(exc, InvalidPath)
 
 
 def _pem_file_contains(path: str | None, marker: str) -> bool:
@@ -175,7 +181,9 @@ class SecretsManager:
                     mount_point=self.mount_point,
                     raise_on_deleted_version=True,
                 )
-            except InvalidPath:
+            except Exception as exc:
+                if not _is_invalid_path(exc):
+                    raise
                 self._secrets = {}
                 return self.secrets
             if response is not None and "data" in response:
