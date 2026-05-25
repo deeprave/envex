@@ -4,6 +4,7 @@ Type smart wrapper around os.environ
 """
 
 import contextlib
+import inspect
 import re
 from pathlib import Path
 from io import TextIOBase, BytesIO
@@ -24,20 +25,7 @@ class Env:
     _BOOLEAN_TRUE_STRINGS = frozenset(("1", "en", "ok", "on", "t", "true", "y", "yes"))
     _BOOLEAN_FALSE_STRINGS = frozenset(("", "0", "f", "false", "n", "no", "off"))
     _EXCEPTION_CLS = KeyError
-    _LOAD_ENV_KWARGS = frozenset(
-        (
-            "env_file",
-            "search_path",
-            "overwrite",
-            "parents",
-            "update",
-            "errors",
-            "working_dirs",
-            "decrypt",
-            "password",
-            "encoding",
-        )
-    )
+    _LOAD_ENV_KWARGS = frozenset(inspect.signature(load_env).parameters)
 
     def __init__(
         self,
@@ -97,10 +85,7 @@ class Env:
                 streams.append(arg)
 
         stream_kwargs = kwargs.pop("streams", ())
-        if isinstance(stream_kwargs, (tuple, list)):
-            streams.extend(stream_kwargs)
-        elif isinstance(stream_kwargs, (BytesIO, TextIOBase)):
-            streams.append(stream_kwargs)
+        self._extend_streams(streams, stream_kwargs)
 
         timeout = kwargs.pop("timeout", None)
         load_env_kwargs = {
@@ -134,6 +119,26 @@ class Env:
             mount_point=mount_point,
             timeout=timeout,
         )
+
+    @staticmethod
+    def _is_stream(value):
+        return isinstance(value, (BytesIO, TextIOBase))
+
+    @classmethod
+    def _extend_streams(cls, streams: list, stream_values) -> None:
+        if stream_values is None:
+            return
+        if cls._is_stream(stream_values):
+            streams.append(stream_values)
+            return
+        try:
+            iterable = iter(stream_values)
+        except TypeError as exc:
+            raise TypeError("streams must be a stream or an iterable of streams") from exc
+        for stream in iterable:
+            if not cls._is_stream(stream):
+                raise TypeError("streams must contain only stream objects")
+            streams.append(stream)
 
     def _resolve_password_selector(self, selector: str | None) -> str | None:
         if not selector:
