@@ -56,6 +56,13 @@ def test_env_wrapper_dict():
     assert env("ENABLED") == "3"
 
 
+def test_env_wrapper_dict_none_is_unset():
+    env = envex.Env({"TEST": "one", "ARG2": None}, environ={})
+
+    assert env("TEST") == "one"
+    assert "ARG2" not in env.env
+
+
 def test_env_wrapper_stream_bytes():
     stream = io.BytesIO(b"ONE=1\nARG2=two\nENABLED=true\n")
     env = envex.Env(stream, environ={})
