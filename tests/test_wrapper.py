@@ -178,6 +178,60 @@ def test_env_bool_rejects_invalid_strings(value):
         env.bool("FLAG")
 
 
+@pytest.mark.parametrize(
+    ("skip_verify", "expected_verify"),
+    [
+        (None, True),
+        ("false", True),
+        ("0", True),
+        ("true", False),
+        ("1", False),
+    ],
+)
+def test_vault_skip_verify_uses_strict_boolean_parsing(
+    skip_verify, expected_verify, monkeypatch
+):
+    class FakeSecretsManager:
+        calls = []
+
+        def __init__(self, **kwargs):
+            self.calls.append(kwargs)
+
+    environ = {}
+    if skip_verify is not None:
+        environ["VAULT_SKIP_VERIFY"] = skip_verify
+
+    monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
+    envex.Env(environ=environ, verify=None)
+
+    assert FakeSecretsManager.calls[-1]["verify"] is expected_verify
+
+
+@pytest.mark.parametrize("verify", [True, False, "/path/to/ca.pem"])
+def test_explicit_vault_verify_overrides_skip_verify(verify, monkeypatch):
+    class FakeSecretsManager:
+        calls = []
+
+        def __init__(self, **kwargs):
+            self.calls.append(kwargs)
+
+    monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
+    envex.Env(environ={"VAULT_SKIP_VERIFY": "true"}, verify=verify)
+
+    assert FakeSecretsManager.calls[-1]["verify"] == verify
+
+
+def test_invalid_vault_skip_verify_raises_value_error(monkeypatch):
+    class FakeSecretsManager:
+        def __init__(self, **kwargs):
+            raise AssertionError("SecretsManager should not be initialized")
+
+    monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
+
+    with pytest.raises(ValueError):
+        envex.Env(environ={"VAULT_SKIP_VERIFY": "treu"}, verify=None)
+
+
 def test_is_set_uses_secret_manager_values():
     class FakeSecretsManager:
         def __init__(self, secrets):
