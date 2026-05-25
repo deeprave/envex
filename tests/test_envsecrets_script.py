@@ -38,7 +38,7 @@ def test_main_parses_argv_and_writes_env_and_secrets(tmp_path, monkeypatch):
     )
 
     envsecrets.main(
-        [
+        (
             "--dotenv",
             str(dotenv),
             "--template",
@@ -46,7 +46,7 @@ def test_main_parses_argv_and_writes_env_and_secrets(tmp_path, monkeypatch):
             "--key",
             "app",
             str(output),
-        ]
+        )
     )
 
     assert output.read_text().splitlines() == [
@@ -61,3 +61,23 @@ def test_main_parses_argv_and_writes_env_and_secrets(tmp_path, monkeypatch):
             "verbose": False,
         }
     ]
+
+
+def test_main_uses_default_output_path(tmp_path, monkeypatch):
+    dotenv = tmp_path / ".env"
+    dotenv.write_text("PUBLIC=hello\n")
+    template = tmp_path / "template.env"
+    template.write_text("PUBLIC\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    envsecrets.main(
+        [
+            "--dotenv",
+            str(dotenv),
+            "--template",
+            str(template),
+        ]
+    )
+
+    assert (tmp_path / "docker.env").read_text().splitlines() == ["PUBLIC=hello"]
