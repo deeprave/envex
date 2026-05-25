@@ -11,7 +11,7 @@ from typing import Any, MutableMapping, Type
 
 from envex.env_hvac import SecretsManager
 
-from .dot_env import load_env, unquote, load_stream, update_env
+from .dot_env import load_env, unquote, load_stream
 
 
 class Env:
@@ -72,14 +72,14 @@ class Env:
         """
         self._env = self.os_env() if environ is None else environ
 
+        self.exception = exception or self._EXCEPTION_CLS
+
         streams = []
         for arg in args:
             if isinstance(arg, dict):
-                update_env(self._env, arg)
+                self.set(arg)
             elif isinstance(arg, (BytesIO, TextIOBase)):
                 streams.append(arg)
-
-        self.exception = exception or self._EXCEPTION_CLS
 
         if "streams" in kwargs and isinstance(kwargs["streams"], (tuple, list)):
             streams.extend(kwargs.pop("streams"))
