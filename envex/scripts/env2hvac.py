@@ -41,6 +41,7 @@ def handler(
 
     try:
         path = sm.join(namespace, environ)
+        sm.get_secrets(path)
         for filename in files:
             filename = expand(filename)
             try:

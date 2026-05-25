@@ -10,7 +10,7 @@ class NoopSecretsManager:
         pass
 
 
-def install_fake_secrets_manager(monkeypatch, fail_write=False):
+def install_fake_secrets_manager(monkeypatch, fail_write=False, existing_values=None):
     instances = []
 
     class FakeClient:
@@ -24,6 +24,8 @@ def install_fake_secrets_manager(monkeypatch, fail_write=False):
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self.client = FakeClient()
+            self.secrets = dict(existing_values or {})
+            self.get_calls = []
             self.writes = []
             self.unseal_calls = []
             self.seal_calls = 0
@@ -33,10 +35,15 @@ def install_fake_secrets_manager(monkeypatch, fail_write=False):
         def join(*args, sep="/"):
             return sep.join([a.strip(sep) for a in args if a])
 
+        def get_secrets(self, path=""):
+            self.get_calls.append(path)
+            return self.secrets
+
         def set_secrets(self, path="", values=None):
             if fail_write:
                 raise RuntimeError("write failed")
-            self.writes.append((path, dict(values or {})))
+            self.secrets |= dict(values or {})
+            self.writes.append((path, dict(self.secrets)))
 
         def unseal(self, keys, root_token):
             self.unseal_calls.append((keys, root_token))
@@ -63,6 +70,28 @@ def test_handler_writes_env_values_to_secret_manager(tmp_path, monkeypatch):
             {
                 "PUBLIC": "hello",
                 "SECRET": "shh",
+            },
+        )
+    ]
+    assert instances[0].get_calls == ["myapp/prod"]
+
+
+def test_handler_preserves_existing_secret_values(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("PUBLIC=updated\n")
+
+    instances = install_fake_secrets_manager(
+        monkeypatch, existing_values={"EXISTING": "keep", "PUBLIC": "old"}
+    )
+
+    env2hvac.handler([str(env_file)], namespace="myapp", environ="prod")
+
+    assert instances[0].writes == [
+        (
+            "myapp/prod",
+            {
+                "EXISTING": "keep",
+                "PUBLIC": "updated",
             },
         )
     ]
