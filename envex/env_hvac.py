@@ -5,7 +5,7 @@ This optional module is used to interface envex with the hvac (Hashicorp Vault) 
 
 import logging
 import os
-from typing import Iterator
+from typing import Any, Iterator
 
 __all__ = ("SecretsManager",)
 
@@ -38,11 +38,11 @@ class SecretsManager:
 
     def __init__(
         self,
-        url: str = None,
-        token: str = None,
+        url: str | None = None,
+        token: str | None = None,
         cert=None,
         verify: bool | str = True,
-        base_path: str = None,
+        base_path: str | None = None,
         engine: str | None = None,
         mount_point: str | None = None,
         timeout: int | None = None,
@@ -82,6 +82,7 @@ class SecretsManager:
             base_path = os.getenv("VAULT_PATH", "")
         if not mount_point:
             mount_point = "secret"
+        self._client: Any | None = None
         if SecretsManager.hvac_disabled:
             self._client = None
         else:
@@ -113,8 +114,6 @@ class SecretsManager:
                 msg = f"{e.__class__.__name__} secrets manager disabled: {e}"
                 logging.debug(msg)
                 SecretsManager.hvac_disabled = True
-                # noinspection PyUnusedLocal
-                hvac = None
                 self._client = None
         self._base_path = self.join(mount_point, "data", base_path)
         self._secrets = {}
@@ -134,8 +133,9 @@ class SecretsManager:
     def client(self):
         # returns hvac.Client | None
         try:
-            if self._client.is_authenticated():
-                return self._client
+            client = self._client
+            if client is not None and client.is_authenticated():
+                return client
         except Exception as exc:
             logging.debug(
                 f"{exc.__class__.__name__} Vault client cannot authenticate {exc}"

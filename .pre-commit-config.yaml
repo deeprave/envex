@@ -2,7 +2,7 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: no-commit-to-branch
         args: ["--branch", "main"]
@@ -16,7 +16,7 @@ repos:
       - id: requirements-txt-fixer
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.6
+    rev: v0.15.14
     hooks:
       - id: ruff
         args:
@@ -36,8 +36,14 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+      - id: ty
+        name: ty check envex
+        entry: ty check envex
+        language: system
+        types: [python]
+        pass_filenames: false
 
   - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.24.1
+    rev: v0.25
     hooks:
       - id: validate-pyproject

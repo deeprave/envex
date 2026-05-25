@@ -9,6 +9,7 @@ import os
 
 import envex
 from envex.env_hvac import SecretsManager
+from envex.scripts.lib.log import fatal
 
 logging.captureWarnings(True)
 
@@ -19,27 +20,24 @@ def expand(p: str):
 
 def handler(
     files: list[str],
-    url: str = None,
-    token: str = None,
-    cert: tuple = None,
+    url: str | None = None,
+    token: str | None = None,
+    cert: tuple[str, str] | None = None,
     verify: bool | str = True,
-    unseal: str = None,
-    namespace: str = None,
-    environ: str = None,
+    unseal: str | None = None,
+    namespace: str | None = None,
+    environ: str | None = None,
 ):
     sm = SecretsManager(url=url, token=token, cert=cert, verify=verify)
     if unseal:
-        sm.unseal(keys=unseal.split(","), root_token=token)
+        sm.unseal(keys=unseal.split(","), root_token=token or "")
 
-    if sm.client is None:
-        # noinspection PyArgumentList
-        logging.fatal(
-            "Can't connect or authenticate with Vault", exc_info=False, exitcode=1
-        )
+    client = sm.client
+    if client is None:
+        fatal("Can't connect or authenticate with Vault", exc_info=False, exitcode=1)
 
-    if sm.client.seal_status["sealed"]:
-        # noinspection PyArgumentList
-        logging.fatal("Vault is currently sealed", exc_info=False, exitcode=4)
+    if client.seal_status["sealed"]:
+        fatal("Vault is currently sealed", exc_info=False, exitcode=4)
 
     try:
         path = sm.join(namespace, environ)

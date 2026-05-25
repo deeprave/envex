@@ -13,6 +13,7 @@ Output:
 import argparse
 import re
 import sys
+from functools import cache
 from pathlib import Path
 from string import Template
 from typing import Union
@@ -51,13 +52,9 @@ def read_env(
     )
 
 
+@cache
 def cache_regex(rx: str) -> re.Pattern:
-    if not hasattr(cache_regex, "cache"):
-        cache_regex.cache = {}
-    cache = cache_regex.cache
-    if rx not in cache:
-        cache[rx] = re.compile(rx)
-    return cache[rx]
+    return re.compile(rx)
 
 
 def env_match(var, regexlist, is_value=False):

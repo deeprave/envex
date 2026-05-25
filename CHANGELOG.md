@@ -1,5 +1,10 @@
 # ChangeLog
 
+### v4.4.0
+
+- Bugfix: `Env.is_set()` now checks the effective source chain, including Vault/secret-manager-backed values.
+- Bugfix: Boolean parsing is now strict and rejects malformed string values instead of matching truthy prefixes.
+
 ### v4.3.0
 
 - Maintenance release only.

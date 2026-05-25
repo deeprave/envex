@@ -63,7 +63,7 @@ def main():
             self.print_usage(sys.stderr)
             self.exit(2)
 
-        def print_usage(self, file = None):
+        def print_usage(self, file=None):
             text = io.StringIO()
             self._print_message(self.format_usage(), text)
             self.print_text(text)
@@ -87,7 +87,6 @@ def main():
             kwargs["max_help_position"] = 45
             kwargs["width"] = 1000
             super().__init__(*args, **kwargs)
-
 
     parser = CustomParser(description=__doc__, formatter_class=CustomHelpFormatter)
     password_opts = parser.add_mutually_exclusive_group()

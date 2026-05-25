@@ -90,7 +90,7 @@ def main():
         if args.unseal:
             keys = args.keys.split(",")
             if len(keys) < int(client.seal_status.get("t")):
-                raise ValueError(f'Require at least {client.seal_status.get("t")} keys')
+                raise ValueError(f"Require at least {client.seal_status.get('t')} keys")
 
             client.sys.submit_unseal_keys(keys=keys)
 
