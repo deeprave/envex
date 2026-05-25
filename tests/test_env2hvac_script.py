@@ -4,13 +4,17 @@ import pytest
 
 from envex.scripts import env2hvac
 
+Forbidden = type("Forbidden", (Exception,), {"__module__": "hvac.exceptions"})
+
 
 class NoopSecretsManager:
     def __init__(self, **kwargs):
         pass
 
 
-def install_fake_secrets_manager(monkeypatch, fail_write=False, existing_values=None):
+def install_fake_secrets_manager(
+    monkeypatch, fail_write=False, forbid_read=False, existing_values=None
+):
     instances = []
 
     class FakeClient:
@@ -37,6 +41,8 @@ def install_fake_secrets_manager(monkeypatch, fail_write=False, existing_values=
 
         def get_secrets(self, path=""):
             self.get_calls.append(path)
+            if forbid_read:
+                raise Forbidden("permission denied")
             return self.secrets
 
         def set_secrets(self, path="", values=None):
@@ -74,6 +80,22 @@ def test_handler_writes_env_values_to_secret_manager(tmp_path, monkeypatch):
         )
     ]
     assert instances[0].get_calls == ["myapp/prod"]
+
+
+def test_handler_writes_when_existing_secret_read_is_forbidden(
+    tmp_path, monkeypatch, caplog
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text("PUBLIC=hello\n")
+
+    instances = install_fake_secrets_manager(monkeypatch, forbid_read=True)
+    caplog.set_level(logging.WARNING)
+
+    env2hvac.handler([str(env_file)], namespace="myapp", environ="prod")
+
+    assert instances[0].get_calls == ["myapp/prod"]
+    assert instances[0].writes == [("myapp/prod", {"PUBLIC": "hello"})]
+    assert "importing without preserving existing values" in caplog.text
 
 
 def test_handler_preserves_existing_secret_values(tmp_path, monkeypatch):
