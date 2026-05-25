@@ -61,10 +61,11 @@ def handler(
                 secrets = {}
                 for k, v in env.items():
                     if k not in ("CWD", "PWD"):
-                        key = sm.join(path, k)
                         if v is not None:
-                            secrets[key] = v
+                            secrets[k] = v
                             count += 1
+                if secrets:
+                    sm.set_secrets(path, values=secrets)
                 logging.info(
                     f"Added or updated {count} items from {filename} to '{path}'"
                 )
