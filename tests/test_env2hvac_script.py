@@ -70,13 +70,14 @@ def test_handler_writes_env_values_to_secret_manager(tmp_path, monkeypatch):
 
 def test_handler_skips_working_dir_values(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
-    env_file.write_text("PUBLIC=hello\n")
+    env_file.write_text("CWD=/from/file/cwd\nPWD=/from/file/pwd\nPUBLIC=hello\n")
 
     instances = install_fake_secrets_manager(monkeypatch)
 
     env2hvac.handler([str(env_file)], namespace="myapp", environ="prod")
 
     written_values = instances[0].writes[0][1]
+    assert written_values["PUBLIC"] == "hello"
     assert "CWD" not in written_values
     assert "PWD" not in written_values
 
