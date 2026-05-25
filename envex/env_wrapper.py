@@ -7,7 +7,7 @@ import contextlib
 import re
 from pathlib import Path
 from io import TextIOBase, BytesIO
-from typing import Any, List, MutableMapping, Type
+from typing import Any, MutableMapping, Type
 
 from envex.env_hvac import SecretsManager
 
@@ -21,21 +21,21 @@ class Env:
 
     _exception: Type[Exception]
 
-    _BOOLEAN_TRUE_STRINGS = ("T", "t", "1", "on", "ok", "Y", "y", "en")
-    _BOOLEAN_TRUE_BYTES = (b"T", b"t", b"1", b"on", b"ok", b"Y", b"y", b"en")
+    _BOOLEAN_TRUE_STRINGS = frozenset(("1", "en", "ok", "on", "t", "true", "y", "yes"))
+    _BOOLEAN_FALSE_STRINGS = frozenset(("", "0", "f", "false", "n", "no", "off"))
     _EXCEPTION_CLS = KeyError
 
     def __init__(
         self,
         *args,
-        environ: MutableMapping[str, str] = None,
+        environ: MutableMapping[str, str] | None = None,
         exception: Type[Exception] | None = None,
         readenv: bool = False,
-        url: str = None,
-        token: str = None,
+        url: str | None = None,
+        token: str | None = None,
         cert=None,
-        verify: bool = True,
-        base_path: str = None,
+        verify: bool | str = True,
+        base_path: str | None = None,
         engine: str | None = None,
         mount_point: str | None = None,
         **kwargs,
@@ -83,8 +83,7 @@ class Env:
             streams.extend(kwargs.pop("streams"))
 
         password = self._resolve_password(
-            kwargs.get("password", None),
-            kwargs.get("decrypt", None)
+            kwargs.get("password", None), kwargs.get("decrypt", None)
         )
         kwargs["decrypt"] = bool(password)
         kwargs["password"] = password
@@ -107,7 +106,7 @@ class Env:
             timeout=kwargs.get("timeout", None),
         )
 
-    def _resolve_password(self, password: str|None, decrypt: bool|None) -> str|None:
+    def _resolve_password(self, password: str | None, decrypt: bool | None) -> str | None:
         if decrypt is False:
             return None
         env_var = None
@@ -120,14 +119,14 @@ class Env:
         elif password:
             env_var = password
         if env_var:
-            if env_var[0] == "$":    # indirect
+            if env_var[0] == "$":  # indirect
                 password = self.env.get(env_var[1:])
             elif env_var[0] == "@":  # from file
-                 pw_file = Path(env_var[1:])
-                 try:
-                     password = pw_file.read_text().rstrip()
-                 except (IOError, PermissionError) as exc:
-                     raise self.exception(*exc.args) from exc
+                pw_file = Path(env_var[1:])
+                try:
+                    password = pw_file.read_text().rstrip()
+                except (IOError, PermissionError) as exc:
+                    raise self.exception(*exc.args) from exc
         return password or None
 
     @property
@@ -205,9 +204,9 @@ class Env:
             del self.env[var]
 
     def is_set(self, var):
-        return var in self.env
+        return self.get(var, None) is not None
 
-    def is_all_set(self, *_vars: str | List[str | list | tuple]):
+    def is_all_set(self, *_vars):
         for v in _vars:
             if isinstance(v, (list, tuple)):
                 return self.is_all_set(*v)
@@ -215,7 +214,7 @@ class Env:
                 return False
         return True
 
-    def is_any_set(self, *_vars: str | List[str | list | tuple]):
+    def is_any_set(self, *_vars):
         for v in _vars:
             if isinstance(v, (list, tuple)):
                 return self.is_any_set(*v)
@@ -233,7 +232,7 @@ class Env:
 
     def bool(self, var, default=None) -> bool:
         val = self.get(var, default)
-        return val if isinstance(val, (bool, int)) else self.is_true(val)
+        return val if isinstance(val, bool) else self.is_true(val)
 
     def list(self, var, default=None) -> list:
         val = self.get(var, default)
@@ -282,19 +281,28 @@ class Env:
                 ...
 
     @classmethod
-    def _true_values(cls, val):
-        return (
-            cls._BOOLEAN_TRUE_STRINGS if isinstance(val, str) else cls._BOOLEAN_TRUE_BYTES
-        )
-
-    @classmethod
     def is_true(cls, val):
-        if val in (None, False, "", 0, "0"):
+        if val is None or val is False:
             return False
-        if not isinstance(val, (str, bytes)):
-            return bool(val)
-        true_vals = cls._true_values(val)
-        return bool(val and any(val.startswith(v) for v in true_vals))
+        if val is True:
+            return True
+        if isinstance(val, int):
+            if val in (0, 1):
+                return bool(val)
+            raise ValueError(f"Invalid boolean value: {val!r}")
+        if isinstance(val, bytes):
+            try:
+                val = val.decode()
+            except UnicodeDecodeError as exc:
+                raise ValueError(f"Invalid boolean value: {val!r}") from exc
+        if isinstance(val, str):
+            normalized = val.strip().lower()
+            if normalized in cls._BOOLEAN_TRUE_STRINGS:
+                return True
+            if normalized in cls._BOOLEAN_FALSE_STRINGS:
+                return False
+            raise ValueError(f"Invalid boolean value: {val!r}")
+        return bool(val)
 
     @classmethod
     def _int(cls, val):

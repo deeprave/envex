@@ -65,7 +65,7 @@ def _env_export(
 
 def _env_files(
     env_file: str, search_path: List[Path], parents: bool, decrypt: bool, errors: bool
-) -> Generator[str | None, Any, None]:
+) -> Generator[str, Any, None]:
     """expand env_file with the full search path, optionally parents as well"""
 
     def resolve_file(base_path: Path, name: str, _decrypt: bool) -> Optional[str]:
@@ -290,17 +290,17 @@ def _update_os_env(environ: MutableMapping[str, str]) -> MutableMapping[str, str
 
 
 def load_env(
-    env_file: str = None,
+    env_file: str | Path | None = None,
     search_path: Union[None, Union[List[str], List[Path]], str] = None,
-    environ: MutableMapping[str, str] = None,
+    environ: MutableMapping[str, str] | None = None,
     overwrite: bool = False,
     parents: bool = False,
     update: bool = True,
     errors: bool = False,
     working_dirs: bool = True,
     decrypt: bool = False,
-    password: str = None,
-    encoding: Optional[str] = DEFAULT_ENCODING,
+    password: str | None = None,
+    encoding: str = DEFAULT_ENCODING,
 ) -> MutableMapping[str, str]:
     """
     Loads one or more .env files with optional nesting, updating os.environ
@@ -321,6 +321,7 @@ def load_env(
         environ = os.environ
     if not env_file:
         env_file = environ.get(DEFAULT_ENVKEY, DEFAULT_DOTENV)
+    env_file = str(env_file)
 
     # insert this as a useful default
     if working_dirs:
@@ -348,7 +349,7 @@ def load_env(
         _process_env(
             env_file,
             search_path,
-            environ.copy(),
+            dict(environ),
             overwrite,
             parents,
             errors,
@@ -364,14 +365,16 @@ def load_env(
 
 def load_stream(
     stream: Union[BytesIO, TextIOBase],
-    environ: MutableMapping[str, str] = None,
+    environ: MutableMapping[str, str] | None = None,
     overwrite: bool = False,
     errors: bool = False,
     decrypt: bool = False,
     password: Optional[str] = None,
-    encoding: Optional[str] = DEFAULT_ENCODING,
+    encoding: str = DEFAULT_ENCODING,
     env_path: Optional[Path] = None,
 ):
+    if environ is None:
+        environ = os.environ
     if isinstance(stream, TextIOBase):
         stream.seek(0)
         stream = BytesIO(stream.read().encode(encoding))

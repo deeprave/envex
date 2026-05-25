@@ -1,12 +1,11 @@
 import logging
-from types import NoneType
 
 __all__ = ("config", "log_set_level", "log_get_level")
 
-from typing import NoReturn
+from typing import Any, NoReturn
 
 
-def fatal(msg, *args, **kwargs) -> NoReturn:
+def fatal(msg: object, *args: object, **kwargs: Any) -> NoReturn:
     """
     Don't use this function, use critical() instead.
     """
@@ -15,7 +14,7 @@ def fatal(msg, *args, **kwargs) -> NoReturn:
     exit(exitcode)
 
 
-logging.fatal = fatal
+setattr(logging, "fatal", fatal)
 
 
 def config(**kwargs):
@@ -37,7 +36,7 @@ __default_level = logging.WARNING
 __current_level = __default_level
 
 
-def log_set_level(level: int | NoneType = None):
+def log_set_level(level: int | None = None):
     """
     Set the log level for the application.
 
@@ -59,7 +58,7 @@ def log_set_level(level: int | NoneType = None):
     return level
 
 
-def log_get_level(level: int | NoneType = None):
+def log_get_level(level: int | None = None):
     if level is None:
         level = __current_level
     return __levelIndex.index(level)

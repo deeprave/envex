@@ -120,12 +120,22 @@ def test_is_true():
     env = envex.Env()
     assert env.is_true(1)
     assert env.is_true("1")
+    assert env.is_true("True")
+    assert env.is_true("yes")
     assert not env.is_true(0)
     assert not env.is_true("0")
     assert not env.is_true(b"0")
     assert not env.is_true(False)
     assert not env.is_true("False")
+    assert not env.is_true("no")
     assert not env.is_true(None)
+
+
+@pytest.mark.parametrize("value", ["treu", "truthy", "onward", "yesplease", "2"])
+def test_is_true_rejects_invalid_strings(value):
+    env = envex.Env()
+    with pytest.raises(ValueError):
+        env.is_true(value)
 
 
 def test_env_bool(monkeypatch):
@@ -137,6 +147,29 @@ def test_env_bool(monkeypatch):
     assert not env.bool("BOOLVALUEFALSE", default=True)
     assert not env.bool("DEFAULTBOOLVALUEFALSE", default=False)
     assert not env("DEFAULTBOOLVALUEFALSE", type=bool)
+
+
+@pytest.mark.parametrize("value", ["treu", "truthy", "onward", "yesplease", "2"])
+def test_env_bool_rejects_invalid_strings(value):
+    env = envex.Env({"FLAG": value}, environ={})
+    with pytest.raises(ValueError):
+        env.bool("FLAG")
+
+
+def test_is_set_uses_secret_manager_values():
+    class FakeSecretsManager:
+        def __init__(self, secrets):
+            self.secrets = secrets
+
+        def get_secret(self, key, default=None):
+            return self.secrets.get(key, default)
+
+    env = envex.Env(environ={})
+    env.secret_manager = FakeSecretsManager({"SECRET_ONLY": "value", "EMPTY_SECRET": ""})
+
+    assert env.is_set("SECRET_ONLY")
+    assert env.is_set("EMPTY_SECRET")
+    assert not env.is_set("MISSING_SECRET")
 
 
 def test_env_list(monkeypatch):

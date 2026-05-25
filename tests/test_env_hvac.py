@@ -213,17 +213,17 @@ def test_get_secrets(
     result = secrets_manager.get_secrets(test_input)
 
     # Assert
-    assert (
-        result == expected_output
-    ), f"get_secrets({test_input}) failed for test_id: {test_id}"
+    assert result == expected_output, (
+        f"get_secrets({test_input}) failed for test_id: {test_id}"
+    )
 
     # Act
     result = secrets_manager.get_secret(test_input_key)
 
     # Assert
-    assert result == expected_output.get(
-        test_input_key, None
-    ), f"get_secret({test_input_key}) failed for test_id: {test_id}"
+    assert result == expected_output.get(test_input_key, None), (
+        f"get_secret({test_input_key}) failed for test_id: {test_id}"
+    )
 
     # Act
     secrets_manager.delete_secrets(test_input)
@@ -254,24 +254,24 @@ def test_get_set_secret(
     secrets_manager, test_input_key, expected_inital_output, modified_value, test_id
 ):
     result = secrets_manager.get_secret(test_input_key)
-    assert (
-        result == expected_inital_output
-    ), f"get_secret({test_input_key}) failed for test_id: {test_id}"
+    assert result == expected_inital_output, (
+        f"get_secret({test_input_key}) failed for test_id: {test_id}"
+    )
 
     secrets_manager.set_secret(test_input_key, modified_value)
     result = secrets_manager.get_secret(test_input_key)
-    assert (
-        result == modified_value
-    ), f"get_secret({test_input_key}) failed for test_id: {test_id}"
+    assert result == modified_value, (
+        f"get_secret({test_input_key}) failed for test_id: {test_id}"
+    )
 
     result = list(secrets_manager.list_secrets())
     expected_result = [test_input_key] if modified_value else []
     assert result == expected_result, f"list_secrets() failed for test_id: {test_id}"
 
     secrets_manager.delete_secret(test_input_key)
-    assert (
-        secrets_manager.secrets == {}
-    ), f"delete_secret({test_input_key}) failed for test_id: {test_id}"
+    assert secrets_manager.secrets == {}, (
+        f"delete_secret({test_input_key}) failed for test_id: {test_id}"
+    )
 
     result = list(secrets_manager.list_secrets())
     assert not result

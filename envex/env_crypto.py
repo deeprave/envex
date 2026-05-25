@@ -51,7 +51,7 @@ try:
         return data[:-padding_length]
 
     def generate_key_from_password(
-        password: str, salt: bytes = None
+        password: str, salt: bytes | None = None
     ) -> tuple[bytes, bytes]:
         """
         Generate an AES key from a password using PBKDF2
