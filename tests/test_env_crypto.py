@@ -58,6 +58,17 @@ def test_encrypt_data_already_encrypted(password):
         encrypt_data(input_enc, password)
 
 
+def test_encrypt_data_value_error_raises_encrypt_error(password, monkeypatch):
+    class BrokenCipher:
+        def encrypt_and_digest(self, _data):
+            raise ValueError("cipher failed")
+
+    monkeypatch.setattr(env_crypto.AES, "new", lambda *args, **kwargs: BrokenCipher())
+    with pytest.raises(EncryptError) as e:
+        encrypt_data(BytesIO(b"test data"), password)
+    assert str(e.value) == "Encryption failed"
+
+
 def test_encrypt_empty_data():
     input_data = BytesIO(b"")
     password = "strongpassword123"

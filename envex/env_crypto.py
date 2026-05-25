@@ -120,7 +120,7 @@ try:
             cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
             encrypted_data, tag = cipher.encrypt_and_digest(input_stream.getvalue())
         except ValueError as exc:
-            raise DecryptError(*exc.args) from exc
+            raise EncryptError("Encryption failed") from exc
 
         logger.debug(
             f"Encryption successful ({len(encrypted_data)} + "

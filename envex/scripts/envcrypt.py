@@ -10,7 +10,7 @@ import string
 from io import BytesIO
 from pathlib import Path
 
-from envex.env_crypto import encrypt_data, decrypt_data, DecryptError
+from envex.env_crypto import encrypt_data, decrypt_data, DecryptError, EncryptError
 
 ENCRYPTED_EXT = ".enc"
 
@@ -105,14 +105,14 @@ def main():
 
     encrypt_opts = parser.add_mutually_exclusive_group()
     encrypt_opts.add_argument(
-        "-e", "--encrypt", action="store_true", default=False, help="Use given password"
+        "-e", "--encrypt", action="store_true", default=False, help="Encrypt input"
     )
     encrypt_opts.add_argument(
         "-d",
         "--decrypt",
         action="store_true",
         default=False,
-        help="Read password from provided environment variable",
+        help="Decrypt input",
     )
 
     parser.add_argument(
@@ -167,7 +167,7 @@ def main():
 
     if not args.encrypt and not args.decrypt:
         logger.error(
-            "{parser.prog}: operation to perform (--encrypt or --decrypt) must be specified"
+            f"{parser.prog}: operation to perform (--encrypt or --decrypt) must be specified"
         )
         exit(3)
     if args.legacy and args.encrypt:
@@ -212,8 +212,8 @@ def main():
             else decrypt_data(input_data, _password, allow_legacy=args.legacy)
         )
         _output.write_bytes(output_data.getvalue())
-    except DecryptError as e:
-        logger.error(f"{parser.prog}: {e.args}")
+    except (EncryptError, DecryptError) as e:
+        logger.error(f"{parser.prog}: {e}")
         exit(4)
 
     if args.rm:
