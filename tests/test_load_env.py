@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import contextlib
+import errno
 import io
 import importlib.util
 
@@ -156,6 +157,35 @@ def test_missing_env_file_errors_true_raises(tmp_path):
             update=False,
             errors=True,
         )
+
+
+def test_missing_env_file_error_lists_parent_search_paths(tmp_path):
+    nested = tmp_path / "project" / "child"
+    nested.mkdir(parents=True)
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        envex.load_env(
+            env_file=".missing",
+            search_path=nested,
+            environ={},
+            update=False,
+            errors=True,
+            parents=True,
+        )
+
+    message = str(exc_info.value)
+    assert nested.resolve().as_posix() in message
+    assert nested.parent.resolve().as_posix() in message
+
+
+def test_env_file_probe_reraises_unexpected_oserror(tmp_path, monkeypatch):
+    def broken_open_env(_path):
+        raise OSError(errno.EIO, "read failure")
+
+    monkeypatch.setattr(envex.dot_env, "open_env", broken_open_env)
+
+    with pytest.raises(OSError, match="read failure"):
+        envex.load_env(search_path=tmp_path, environ={}, update=False)
 
 
 def test_post_process_iterates_over_snapshot():

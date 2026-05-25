@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import errno
 import os
 import sys
 import contextlib
@@ -76,8 +77,16 @@ def _env_files(
             try:
                 with open_env(path):
                     return True
-            except OSError:
-                return False
+            except OSError as exc:
+                if exc.errno in {
+                    errno.EACCES,
+                    errno.ENOENT,
+                    errno.ENOTDIR,
+                    errno.EPERM,
+                    errno.EISDIR,
+                }:
+                    return False
+                raise
 
         if _decrypt:
             encrypted_path = os.path.join(base_path, name + ENCRYPTED_EXT)
@@ -88,14 +97,21 @@ def _env_files(
         return standard_path if readable(standard_path) else None
 
     searched = []
+    seen = set()
     found = False
+
+    def record_search(path: Path) -> None:
+        if path not in seen:
+            searched.append(path)
+            seen.add(path)
+
     for path in search_path:
         path = path.resolve()
         if not path.is_dir():
             path = path.parent
-        searched.append(path)
 
         for sub_path in [path] + list(path.parents):
+            record_search(sub_path)
             env_path = resolve_file(sub_path, env_file, decrypt)
             if env_path is not None:
                 found = True
