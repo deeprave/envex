@@ -9,6 +9,15 @@
 - To migrate existing files, decrypt the legacy `.env.enc` file with a version that can read it, then re-encrypt it with envex 5.0.0 or later using
   - `envcrypt --decrypt --legacy ...`, followed by
   - `envcrypt --encrypt ...`.
+- ⚠️ BREAKING CHANGE ⚠️: `SecretsManager.base_path` and `SecretsManager.path()` now represent logical KV v2 secret paths instead of raw Vault API paths such as `secret/data/...`. Direct `SecretsManager` users that passed or compared raw API paths should migrate to logical paths and use `mount_point` for the Vault secrets engine mount, which defaults to `secret/`.
+- Vault secret reads, writes, and deletes now use hvac's KV v2 API instead of raw `client.read()`, `client.write()`, and `client.delete()` calls. This improves behavior with namespaces and non-standard mount points.
+- `SecretsManager` Vault initialization failures are now instance-local; one transient failure no longer disables Vault lookups for all later instances in the process.
+- Vault client certificate environment handling now validates PEM files and passes file paths to hvac/requests. `VAULT_CLIENT_CERT` may point to a combined certificate/key PEM file, or `VAULT_CLIENT_CERT` and `VAULT_CLIENT_KEY` may point to separate files. Incomplete client certificate configuration now logs a warning.
+- `SecretsManager.set_secrets(path, values={})` is non-destructive; use `delete_secrets(path)` to delete a secret document explicitly.
+- `.env` `export` lines no longer bypass isolated environment mappings by writing directly to `os.environ`; global process updates remain controlled by `load_env(update=True)` or explicit `Env.export()`.
+- `Env.set(..., None)` now treats `None` as unset, and `Env.setdefault(..., None)` no longer stores `None`. Dict arguments passed to `Env(...)` use the same setter semantics, so `None` is not stringified as `"None"`.
+- Test Vault container setup now avoids deprecated `testcontainers.vault.VaultContainer` imports, keeping warning-as-error test collection clean.
+- Documentation now uses the official HashiCorp Vault capitalization.
 
 ### v4.4.0
 

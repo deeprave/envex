@@ -112,9 +112,10 @@ In addition, Env supports a few HashiCorp Vault configuration parameters as well
 * token: (str, optional) vault token, default is `$VAULT_TOKEN` or content of `~/.vault-token`
 * cert: (tuple, optional) (cert, key) path to client SSL certificate and key files
 * verify: (bool, optional) whether to verify server cert (default is True)
-* base_path: (optional) secrets base path, or "environment" for secrets (default is None).
+* base_path: (optional) logical secrets base path, or "environment" for secrets (default is None).
+* mount_point: (optional) Vault secrets engine mount point (default is `secret/`).
 * enable_cache: bool whether to cache values fetched from Vault (default is True)
-  This is used to prefix the path to the secret, i.e. `f"/secret/{base_path}/key"`.
+  This is used to prefix the logical path to the secret, i.e. `f"{base_path}/key"`.
 
 Some type-smart functions act as an alternative to `Env.get` and having to parse the result:
 ```python
@@ -251,7 +252,7 @@ A read-only profile is the strongly recommended policy for tokens used at runtim
 
 This library provides a utility called `env2hvac` that can import (create or update) a typical .env file into vault. The
 utility uses a prefix that consists of an application name and an environment name, using the format <appname>/<envname>/<key> - for example, myapp/prod/DB_PASSWORD. The utility requires that the token has a role with create permission for the base secrets path on the vault server.
-The utility currently assumes that the kv secrets engine is mounted at secret/. The final path where the secrets are stored will be secret/data/<appname>/<envname>/<key>.
+By default, the utility uses the kv.v2 secrets engine mounted at `secret/`. The logical path where the secrets are stored will be <appname>/<envname>/<key>.
 
 ### Environment Variables
 
