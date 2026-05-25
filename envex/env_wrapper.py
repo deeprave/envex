@@ -93,13 +93,16 @@ class Env:
             self.read_env(**kwargs)
         self.read_streams(*streams, **kwargs)
         self.env_source = self.env.get("ENVEX_SOURCE", "env") == "env"
+        vault_verify = (
+            verify
+            if verify is not None
+            else not self.bool("VAULT_SKIP_VERIFY", default=False)
+        )
         self.secret_manager = SecretsManager(
             url=url,
             token=token,
             cert=cert,
-            verify=verify
-            if verify is not None
-            else not self.env.get("VAULT_SKIP_VERIFY", False),
+            verify=vault_verify,
             base_path=base_path,
             engine=engine,
             mount_point=mount_point,
