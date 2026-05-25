@@ -13,6 +13,7 @@ Output:
 import argparse
 import re
 import sys
+from collections.abc import Sequence
 from functools import cache
 from pathlib import Path
 from string import Template
@@ -253,6 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "output",
         action="store",
+        nargs="?",
         default=output_default,
         help=f'output to this file (default="{output_default}")',
     )
@@ -268,7 +270,7 @@ def run(args: argparse.Namespace) -> None:
         create_or_update_secrets(secrets, args.key, args.cert, args.verbose)
 
 
-def main(argv: list[str] | argparse.Namespace | None = None) -> None:
+def main(argv: Sequence[str] | argparse.Namespace | None = None) -> None:
     args = (
         argv if isinstance(argv, argparse.Namespace) else build_parser().parse_args(argv)
     )
