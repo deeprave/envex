@@ -154,7 +154,7 @@ The new format authenticates encrypted data before returning plaintext and is no
 
 Encrypted `.env` files are named as `.env.enc` by default (strictly, `${DOTENV:-.env}.enc`), to distinguish them from the unencrypted version, but this is only by convention; both to distinguish the files visually, and to prevent other dot-env readers from using them.
 
-If the feature is enabled and a pass phrase is provided when the environment file is read, `envex` determines automatically if it contains encrypted data. If the `.enc` version of the environment file does not exist, the .env file - encrypted or not - is used as a fallback, but will otherwise be ignored.
+If the feature is enabled and a passphrase is provided when the environment file is read, `envex` determines automatically if it contains encrypted data. If the `.enc` version of the environment file does not exist, the .env file - encrypted or not - is used as a fallback, but will otherwise be ignored.
 
 ### Version 5 Encrypted File Compatibility
 
@@ -172,7 +172,7 @@ envcrypt --decrypt --legacy --password "$PASSPHRASE" .env.enc .env
 envcrypt --encrypt --password "$PASSPHRASE" .env .env.enc
 ```
 
-If the pass phrase is stored in an environment variable or file, use `--environ NAME` or `--file PATH` instead of `--password`.
+If the passphrase is stored in an environment variable or file, use `--environ NAME` or `--file PATH` instead of `--password`.
 After migration, verify the new file can be decrypted by envex 5.0.0 or later and remove any temporary plaintext file:
 
 ```shell
@@ -207,14 +207,14 @@ options:
 ```
 Either `--encrypt` or `--decrypt` must be provided
 
-A pass phrase is required, one of `--password`, `--environ`, or `--file` must also be given. If the pass phrase is not provided, the utility will prompt for it stdin is available and is a terminal.
+A passphrase is required, one of `--password`, `--environ`, or `--file` must also be given. If the passphrase is not provided, the utility will prompt for it stdin is available and is a terminal.
 
 After an encryption or decryption operation, the input file is retained by default, but can be removed using the `--rm` option.
 
 Specifying the output filename is optional, and if not given the utility will append `.enc` to the input filename for encryption, or remove `.enc` for decryption. The --rm option will remove the input file on success.
 
 Note that similar to use of the Vault option, the value of encrypted variables is not published (exported) to the process environment unless the "export" prefix is used in the decrypted environment file, and therefore remains hidden from external processes.
-However, the pass phrase must be available in order for the environment to be read, and therefore the security of the encrypted file is only as strong as the security of that pass phrase.
+However, the passphrase must be available in order for the environment to be read, and therefore the security of the encrypted file is only as strong as the security of that passphrase.
 
 Three options are available when using the `Env` class to read encrypted environment files.
 A value passed to the password parameter can be a string which is by default the plain text passphrase.
