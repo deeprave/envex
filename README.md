@@ -110,10 +110,10 @@ In addition, Env supports a few HashiCorp Vault configuration parameters as well
 
 * url: (str, optional) vault url, default is `$VAULT_ADDR`
 * token: (str, optional) vault token, default is `$VAULT_TOKEN` or content of `~/.vault-token`
-* cert: (tuple, optional) (cert, key) path to client SSL certificate and key files
+* cert: (str or tuple, optional) path to a combined client certificate/key PEM file, or a `(cert, key)` tuple of separate PEM file paths
 * verify: (bool, optional) whether to verify server cert (default is True)
 * base_path: (optional) logical secrets base path, or "environment" for secrets (default is None).
-* mount_point: (optional) Vault secrets engine mount point (default is `secret/`).
+* mount_point: (optional) Vault secrets engine mount point (default is `secret/`; values may be provided with or without slashes and are normalized internally).
 * enable_cache: bool whether to cache values fetched from Vault (default is True)
   This is used to prefix the logical path to the secret, i.e. `f"{base_path}/key"`.
 
@@ -251,8 +251,8 @@ To access the Vault server, you need a token with a role that has read permissio
 A read-only profile is the strongly recommended policy for tokens used at runtime by the application.
 
 This library provides a utility called `env2hvac` that can import (create or update) a typical .env file into vault. The
-utility uses a prefix that consists of an application name and an environment name, using the format <appname>/<envname>/<key> - for example, myapp/prod/DB_PASSWORD. The utility requires that the token has a role with create permission for the base secrets path on the vault server.
-By default, the utility uses the kv.v2 secrets engine mounted at `secret/`. The logical path where the secrets are stored will be <appname>/<envname>/<key>.
+utility stores one KV document per application and environment, using the logical path <appname>/<envname> - for example, myapp/prod - with .env keys stored inside that document. The utility requires that the token has a role with create or update permission for the target secrets path on the vault server.
+By default, the utility uses the kv.v2 secrets engine mounted at `secret/`. A key such as `DB_PASSWORD` from `myapp/prod` is stored inside the KV document at logical path `myapp/prod`.
 
 ### Environment Variables
 
@@ -267,5 +267,5 @@ A summary of these variables is in the following table:
 | VAULT_TOKEN       | The vault token to use for authentication                              |
 | VAULT_CACERT      | The path to the CA certificate to use for TLS verification             |
 | VAULT_CAPATH      | The path to a directory of CA certificates to use for TLS verification |
-| VAULT_CLIENT_CERT | The path to the client certificate to use for TLS connection           |
-| VAULT_CLIENT_KEY  | The path to the client key to use for TLS connection                   |
+| VAULT_CLIENT_CERT | The path to the client certificate PEM file, or a combined certificate/key PEM file for TLS client auth |
+| VAULT_CLIENT_KEY  | The optional path to a separate client key PEM file for TLS client auth |

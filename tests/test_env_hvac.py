@@ -167,7 +167,7 @@ def test_initialization_failure_is_instance_local(monkeypatch):
     ("env_name", "contents", "is_key"),
     [
         ("VAULT_CLIENT_CERT", "-----BEGIN CERTIFICATE-----\n", False),
-        ("VAULT_CLIENT_KEY", "-----BEGIN PRIVATE KEY-----\n", True),
+        ("VAULT_CLIENT_KEY", "not a real PRIVATE KEY\n", True),
     ],
 )
 def test_read_pem_returns_valid_file_path(
@@ -194,7 +194,7 @@ def test_client_certificate_env_vars_are_passed_as_paths(tmp_path, monkeypatch):
     cert = tmp_path / "client.pem"
     key = tmp_path / "client-key.pem"
     cert.write_text("-----BEGIN CERTIFICATE-----\n")
-    key.write_text("-----BEGIN PRIVATE KEY-----\n")
+    key.write_text("not a real PRIVATE KEY\n")
     monkeypatch.setenv("VAULT_CLIENT_CERT", cert.as_posix())
     monkeypatch.setenv("VAULT_CLIENT_KEY", key.as_posix())
     instances = install_fake_hvac_client(monkeypatch)
@@ -208,7 +208,7 @@ def test_combined_client_certificate_file_is_passed_as_single_path(
     tmp_path, monkeypatch, caplog
 ):
     cert = tmp_path / "client-combined.pem"
-    cert.write_text("-----BEGIN CERTIFICATE-----\n-----BEGIN PRIVATE KEY-----\n")
+    cert.write_text("-----BEGIN CERTIFICATE-----\nnot a real PRIVATE KEY\n")
     monkeypatch.setenv("VAULT_CLIENT_CERT", cert.as_posix())
     monkeypatch.delenv("VAULT_CLIENT_KEY", raising=False)
     instances = install_fake_hvac_client(monkeypatch)
