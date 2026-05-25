@@ -18,6 +18,25 @@ def expand(p: str):
     return os.path.expandvars(os.path.expanduser(p))
 
 
+def _is_forbidden(exc: Exception) -> bool:
+    return exc.__class__.__name__ == "Forbidden" and exc.__class__.__module__.startswith(
+        "hvac."
+    )
+
+
+def _load_existing_secrets(sm: SecretsManager, path: str) -> None:
+    try:
+        sm.get_secrets(path)
+    except Exception as exc:
+        if not _is_forbidden(exc):
+            raise
+        logging.warning(
+            "Cannot read existing secrets at '%s'; importing without preserving "
+            "existing values",
+            path,
+        )
+
+
 def handler(
     files: list[str],
     url: str | None = None,
@@ -41,7 +60,7 @@ def handler(
 
     try:
         path = sm.join(namespace, environ)
-        sm.get_secrets(path)
+        _load_existing_secrets(sm, path)
         for filename in files:
             filename = expand(filename)
             try:
