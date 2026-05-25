@@ -208,7 +208,7 @@ class SecretsManager:
             return response["sealed"]
         return None
 
-    def unseal(self, keys: list, root_token: str):
+    def unseal(self, keys: list, root_token: str | None):
         if self.client:
             response = self.client.sys.submit_unseal_keys(keys, root_token)
             return not response["sealed"]
