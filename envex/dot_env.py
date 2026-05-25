@@ -15,7 +15,7 @@ from typing import (
     Generator,
 )
 
-from .env_crypto import decrypt_data, DecryptError
+from .env_crypto import AUTH_MAGIC_BYTES, MAGIC_BYTES, decrypt_data, DecryptError
 
 __all__ = (
     "load_env",
@@ -35,6 +35,7 @@ DEFAULT_ENCODING = "utf-8"
 _MODIFIER_PATTERN = re.compile(r":([-+])")
 _VAR_BRACES_PATTERN = re.compile(r"\${([^{}]+)}")
 _VAR_NO_BRACES_PATTERN = re.compile(r"\$([a-zA-Z_][a-zA-Z0-9_]*)")
+_DOTENV_ASSIGNMENT_PREFIX_PATTERN = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*\s*=")
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 
 
@@ -52,14 +53,14 @@ def update_env(env: MutableMapping[str, str], mapping: Dict):
 def _env_default(
     environ: MutableMapping[str, str], key: str, val: str, overwrite: bool = False
 ):
-    if key and val and (overwrite or key not in environ):
+    if key and val is not None and (overwrite or key not in environ):
         environ[key] = val
 
 
 def _env_export(
     environ: MutableMapping[str, str], key: str, val: str, overwrite: bool = False
 ):
-    if key and val and (overwrite or key not in environ):
+    if key and val is not None and (overwrite or key not in environ):
         environ[key] = val
 
 
@@ -70,15 +71,24 @@ def _env_files(
 
     def resolve_file(base_path: Path, name: str, _decrypt: bool) -> Optional[str]:
         """Returns the path to the env file, prioritising the encrypted version if enabled"""
+
+        def readable(path: str) -> bool:
+            try:
+                with open_env(path):
+                    return True
+            except OSError:
+                return False
+
         if _decrypt:
             encrypted_path = os.path.join(base_path, name + ENCRYPTED_EXT)
-            if os.access(encrypted_path, os.R_OK):
+            if readable(encrypted_path):
                 return encrypted_path
 
         standard_path = os.path.join(base_path, name)
-        return standard_path if os.access(standard_path, os.R_OK) else None
+        return standard_path if readable(standard_path) else None
 
     searched = []
+    found = False
     for path in search_path:
         path = path.resolve()
         if not path.is_dir():
@@ -88,15 +98,14 @@ def _env_files(
         for sub_path in [path] + list(path.parents):
             env_path = resolve_file(sub_path, env_file, decrypt)
             if env_path is not None:
+                found = True
                 yield env_path
                 break
             elif not parents:
                 break
 
-    if errors:
+    if errors and not found:
         raise FileNotFoundError(f"{env_file} in {[s.as_posix() for s in searched]}")
-    else:
-        yield env_file
 
 
 @contextlib.contextmanager
@@ -176,12 +185,12 @@ def _process_env(
     files_not_found = []
     files_found = False
     for env_path in _env_files(env_file, search_path, parents, decrypt, errors):
-        # insert PWD as the container of the env file
         env_path = Path(env_path).resolve()
-        if working_dirs:
-            environ["PWD"] = str(env_path.parent)
         try:
             with open_env(env_path) as f:
+                # insert PWD as the container of the env file
+                if working_dirs:
+                    environ["PWD"] = str(env_path.parent)
                 data = f.read()
                 if isinstance(data, str):
                     data = data.encode(encoding)
@@ -273,7 +282,7 @@ def _post_process(environ: MutableMapping[str, str]) -> MutableMapping[str, str]
     - ${VAR:+value} - Use value only if VAR is set
     - $VAR - Variable substitution without braces
     """
-    for key, val in environ.items():
+    for key, val in list(environ.items()):
         if "$" in val:  # Potential variable reference!
             new_val = _process_nested_vars(val, environ)
             if new_val != val:
@@ -404,11 +413,34 @@ def load_stream(
         stream = BytesIO(stream.read().encode(encoding))
     elif password and decrypt:
         stream_pos = stream.tell()
+        header = stream.read(len(MAGIC_BYTES))
+        stream.seek(stream_pos)
+        encrypted_header = header in (MAGIC_BYTES, AUTH_MAGIC_BYTES)
         try:
             stream = decrypt_data(stream, password)
         except DecryptError:
             stream.seek(stream_pos)
+            if encrypted_header and (
+                _is_encrypted_env_path(env_path)
+                or not _looks_like_plaintext_dotenv(stream, encoding)
+            ):
+                raise
     _process_stream(stream, environ, overwrite, errors, encoding, env_path)
+
+
+def _is_encrypted_env_path(env_path: Optional[Path]) -> bool:
+    return env_path is not None and env_path.name.endswith(ENCRYPTED_EXT)
+
+
+def _looks_like_plaintext_dotenv(stream: BytesIO, encoding: str) -> bool:
+    stream_pos = stream.tell()
+    try:
+        line = stream.readline().decode(encoding).strip()
+    except UnicodeDecodeError:
+        return False
+    finally:
+        stream.seek(stream_pos)
+    return bool(_DOTENV_ASSIGNMENT_PREFIX_PATTERN.match(line))
 
 
 load_dotenv = load_env

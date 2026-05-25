@@ -5,7 +5,8 @@ import io
 import pytest
 
 import envex
-from envex.env_crypto import encrypt_data
+import envex.env_crypto as env_crypto
+from envex.env_crypto import DecryptError, encrypt_data
 
 TEST_ENV = [
     "# This is an example .env file",
@@ -648,6 +649,47 @@ def test_plain_stream_with_env_password_is_not_corrupted(password):
     assert env("ONE") == "1"
     assert env("ARG2") == "two"
     assert env("ENABLED") == "true"
+
+
+@pytest.mark.parametrize("key", ["SECG_KEY", "SECF_KEY"])
+def test_plain_stream_magic_prefix_key_with_env_password_is_not_rejected(password, key):
+    stream = io.BytesIO(f"{key}=value\n".encode())
+
+    env = envex.Env(stream, environ={"ENV_PASSWORD": password})
+
+    assert env[key] == "value"
+
+
+@pytest.mark.parametrize("key", ["SECG_KEY", "SECF_KEY"])
+def test_plain_env_file_magic_prefix_key_with_env_password_is_not_rejected(
+    password, tmp_path, key
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"{key}=value\n")
+
+    env = envex.Env(
+        readenv=True,
+        environ={"ENV_PASSWORD": password},
+        env_file=".env",
+        search_path=tmp_path,
+        update=False,
+    )
+
+    assert env[key] == "value"
+
+
+def test_encrypted_stream_wrong_password_raises_decrypt_error(password):
+    stream = encrypt_data(io.BytesIO(b"ONE=1\n"), password)
+
+    with pytest.raises(DecryptError):
+        envex.Env(stream, decrypt=True, password="wrong-password")
+
+
+def test_legacy_encrypted_stream_without_opt_in_raises_decrypt_error(password):
+    stream = io.BytesIO(env_crypto.MAGIC_BYTES + b"legacy-data")
+
+    with pytest.raises(DecryptError, match="Legacy AES-CBC data requires explicit"):
+        envex.Env(stream, decrypt=True, password=password)
 
 
 def test_decrypt_false_ignores_env_password(password, tmp_path):
