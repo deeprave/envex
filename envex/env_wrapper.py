@@ -195,11 +195,15 @@ class Env:
         if isinstance(var, dict):
             for k, v in var.items():
                 self.set(k, v)
+        elif value is None:
+            self.unset(var)
         else:
-            self.env[var] = str(value) if value is not None else value
+            self.env[var] = str(value)
 
     def setdefault(self, var, value) -> str | None:
-        return self.env.setdefault(var, str(value) if value is not None else value)
+        if var not in self.env:
+            self.set(var, value)
+        return self.env.get(var)
 
     def unset(self, var):
         if var in self.env:

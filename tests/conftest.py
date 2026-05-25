@@ -4,10 +4,10 @@ import pytest
 try:
     import hvac
     from hvac.exceptions import InvalidRequest
+    from testcontainers.core.container import DockerContainer
+    from testcontainers.core.wait_strategies import HttpWaitStrategy
 
     use_hvac = True
-
-    from testcontainers.vault import VaultContainer
 
     container_name = "hashicorp/vault:1.14.4"
 
@@ -15,6 +15,27 @@ try:
         "ABC": "123",
         "DEF": "456",
     }
+
+    class VaultContainer(DockerContainer):
+        def __init__(
+            self,
+            image: str = container_name,
+            port: int = 8200,
+            root_token: str = "toor",
+        ) -> None:
+            super().__init__(image)
+            self.port = port
+            self.root_token = root_token
+            self.with_exposed_ports(self.port)
+            self.with_env("VAULT_DEV_ROOT_TOKEN_ID", self.root_token)
+            self.waiting_for(
+                HttpWaitStrategy(self.port, "/v1/sys/health").for_status_code(200)
+            )
+
+        def get_connection_url(self) -> str:
+            host_ip = self.get_container_host_ip()
+            exposed_port = self.get_exposed_port(self.port)
+            return f"http://{host_ip}:{exposed_port}"
 
     @pytest.fixture(scope="session")
     def vault(request) -> VaultContainer:
