@@ -60,7 +60,6 @@ def _env_export(
 ):
     if key and val and (overwrite or key not in environ):
         environ[key] = val
-        os.environ[key] = val
 
 
 def _env_files(

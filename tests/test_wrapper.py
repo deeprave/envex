@@ -396,12 +396,39 @@ def test_setdefault_non_none():
 
 def test_setdefault_none():
     env = envex.Env(environ={})
-    # Test when value is None
+
     result = env.setdefault("var2", None)
+
     assert result is None
-    assert env.env["var2"] is None
+    assert "var2" not in env.env
     env.setdefault("var2", 543)
-    assert env.env["var2"] is None
+    assert env.env["var2"] == "543"
+
+
+def test_setdefault_none_preserves_existing_value():
+    env = envex.Env({"var2": "value"}, environ={})
+
+    result = env.setdefault("var2", None)
+
+    assert result == "value"
+    assert env.env["var2"] == "value"
+
+
+def test_set_none_unsets_existing_value():
+    env = envex.Env({"var1": "value"}, environ={})
+
+    env.set("var1", None)
+
+    assert "var1" not in env.env
+
+
+def test_set_dict_none_unsets_existing_value():
+    env = envex.Env({"var1": "value", "var2": "keep"}, environ={})
+
+    env.set({"var1": None, "var2": 123})
+
+    assert "var1" not in env.env
+    assert env.env["var2"] == "123"
 
 
 def test_setdefault_exists():

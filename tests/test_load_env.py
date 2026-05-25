@@ -42,6 +42,26 @@ def test_load_env(monkeypatch, envmap):
     assert env["COMBINED"] == "first-value:third-value:fifth-value"
 
 
+def test_export_command_respects_isolated_environ(monkeypatch, envmap):
+    monkeypatch.delenv("FIFTH", raising=False)
+    monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
+
+    env = envex.load_env(search_path=__file__, environ=envmap, update=False)
+
+    assert env["FIFTH"] == "fifth-value"
+    assert "FIFTH" not in envex.dot_env.os.environ
+
+
+def test_export_command_updates_os_environ_only_when_requested(monkeypatch, envmap):
+    monkeypatch.delenv("FIFTH", raising=False)
+    monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
+
+    env = envex.load_env(search_path=__file__, environ=envmap, update=True)
+
+    assert env["FIFTH"] == "fifth-value"
+    assert envex.dot_env.os.environ["FIFTH"] == "fifth-value"
+
+
 def test_load_env_overwrite(monkeypatch, envmap):
     monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
     env = envex.load_env(search_path=__file__, environ=envmap, overwrite=True)

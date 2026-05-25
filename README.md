@@ -1,9 +1,11 @@
+[![Maintenance](https://img.shields.io/badge/maintenance-active-brightgreen.svg)](https://github.com/deeprave/envex)
+[![PyPI version](https://img.shields.io/pypi/v/envex.svg?logo=pypi&logoColor=white)](https://pypi.org/project/envex)
+[![PyPI downloads](https://img.shields.io/pypi/dm/envex.svg?logo=pypi&logoColor=white)](https://pypi.org/project/envex)
+[![Python versions](https://img.shields.io/pypi/pyversions/envex.svg?logo=python&logoColor=white)](https://pypi.org/project/envex)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 # ENV EXtended
 
 `envex` is a dotenv `.env` aware environment variable handler with typing features and Hashicorp vault support.
-
-[![PyPI version](https://badge.fury.io/py/envex.svg)](https://badge.fury.io/py/envex)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 ## Overview
 
@@ -61,6 +63,8 @@ env.set('UNSET_VAR', 'this is now set')
 assert env.get('UNSET_VAR') is not None
 env.setdefault('UNSET_VAR', 'and this is a default value but only if not set')
 assert env.get('UNSET_VAR') == 'this is now set'
+env.set('UNSET_VAR', None)
+assert env.get('UNSET_VAR') is None
 del env['UNSET_VAR']
 assert env.get('UNSET_VAR') is None
 ```
