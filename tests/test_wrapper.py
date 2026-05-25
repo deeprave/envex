@@ -687,11 +687,8 @@ def test_encrypted_stream_bytes2(password):
     assert env("ENABLED") == "true"
 
 
-def test_encrypted_stream_invalid_format(password):
-    import os
-
-    # Create an invalid encrypted format by using random bytes
-    invalid_data = os.urandom(100)
+def test_encrypted_stream_invalid_plaintext_fallback_decode_error(password):
+    invalid_data = b"\xff\xfe\xfa=not-utf-8\n"
 
     with pytest.raises(UnicodeDecodeError):
         envex.Env(io.BytesIO(invalid_data), decrypt=True, password=password)
