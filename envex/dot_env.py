@@ -380,8 +380,11 @@ def load_stream(
         stream.seek(0)
         stream = BytesIO(stream.read().encode(encoding))
     elif password and decrypt:
-        with contextlib.suppress(DecryptError):
+        stream_pos = stream.tell()
+        try:
             stream = decrypt_data(stream, password)
+        except DecryptError:
+            stream.seek(stream_pos)
     _process_stream(stream, environ, overwrite, errors, encoding, env_path)
 
 

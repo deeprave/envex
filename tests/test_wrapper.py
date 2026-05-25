@@ -493,6 +493,33 @@ def test_encrypted_env_file_uses_file_env_password(password, tmp_path):
     assert env("ENABLED") == "true"
 
 
+def test_plain_env_file_fallback_with_env_password_is_not_corrupted(password, tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("ONE=1\nARG2=two\nENABLED=true\n")
+
+    env = envex.Env(
+        readenv=True,
+        environ={"ENV_PASSWORD": password},
+        env_file=".env",
+        search_path=tmp_path,
+        update=False,
+    )
+
+    assert env("ONE") == "1"
+    assert env("ARG2") == "two"
+    assert env("ENABLED") == "true"
+
+
+def test_plain_stream_with_env_password_is_not_corrupted(password):
+    stream = io.BytesIO(b"ONE=1\nARG2=two\nENABLED=true\n")
+
+    env = envex.Env(stream, environ={"ENV_PASSWORD": password})
+
+    assert env("ONE") == "1"
+    assert env("ARG2") == "two"
+    assert env("ENABLED") == "true"
+
+
 def test_decrypt_false_ignores_env_password(password, tmp_path):
     write_encrypted_env(tmp_path, password)
 
