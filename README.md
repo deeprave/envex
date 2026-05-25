@@ -197,8 +197,8 @@ options:
 -E, --environ ENVIRON    Read password from provided environment variable (default: None)
 -F, --file FILE          Read password from a given file (default: None)
 
--e, --encrypt            Use given password (default: False)
--d, --decrypt            Read password from provided environment variable (default: False)
+-e, --encrypt            Encrypt input (default: False)
+-d, --decrypt            Decrypt input (default: False)
 --legacy                 Allow decrypting legacy AES-CBC files for migration (default: False)
 
 -r, --rm                 Remove input file after successful conversion (default: False)
