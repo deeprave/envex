@@ -189,6 +189,16 @@ def test_env_kwargs_override_stream_values():
     assert env["FOO"] == "kwarg"
 
 
+def test_streams_load_into_env_returned_by_readenv_update_false(monkeypatch):
+    monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
+    stream = io.BytesIO(b"STREAM_ONLY=stream\n")
+
+    env = envex.Env(stream, readenv=True, update=False, environ={})
+
+    assert env["INTVALUE"] == "225"
+    assert env["STREAM_ONLY"] == "stream"
+
+
 def test_env_streams_kwarg_accepts_iterables():
     def stream_values():
         yield io.BytesIO(b"FIRST=one\n")

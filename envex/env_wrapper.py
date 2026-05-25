@@ -101,6 +101,7 @@ class Env:
         load_env_kwargs.setdefault("environ", self._env)
         if readenv:
             self.read_env(**load_env_kwargs)
+            load_env_kwargs["environ"] = self._env
         self.read_streams(*streams, **load_env_kwargs)
         self.set(kwargs)
         self.env_source = self.env.get("ENVEX_SOURCE", "env") == "env"
