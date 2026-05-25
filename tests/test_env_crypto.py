@@ -119,8 +119,23 @@ def legacy_encrypt_data(data: bytes, password: str) -> BytesIO:
 
 def test_legacy_cbc_decryption_remains_supported(password):
     encrypted_data = legacy_encrypt_data(b"LEGACY_ENCRYPTED_DATA", password)
-    result = decrypt_data(encrypted_data, password)
+    result = decrypt_data(encrypted_data, password, allow_legacy=True)
     assert result.getvalue() == b"LEGACY_ENCRYPTED_DATA"
+
+
+def test_legacy_cbc_decryption_requires_opt_in(password):
+    encrypted_data = legacy_encrypt_data(b"LEGACY_ENCRYPTED_DATA", password)
+    with pytest.raises(DecryptError) as e:
+        decrypt_data(encrypted_data, password)
+    assert str(e.value) == "Legacy AES-CBC data requires explicit legacy decryption"
+
+
+def test_downgraded_gcm_header_does_not_fall_back_to_legacy(password):
+    encrypted_data = bytearray(encrypt_data(BytesIO(b"test"), password).getvalue())
+    encrypted_data[: len(env_crypto.AUTH_MAGIC_BYTES)] = env_crypto.MAGIC_BYTES
+    with pytest.raises(DecryptError) as e:
+        decrypt_data(BytesIO(encrypted_data), password)
+    assert str(e.value) == "Legacy AES-CBC data requires explicit legacy decryption"
 
 
 def test_legacy_cbc_padding_failures_are_generic(password):
@@ -129,7 +144,7 @@ def test_legacy_cbc_padding_failures_are_generic(password):
     )
     encrypted_data[-1] ^= 1
     with pytest.raises(DecryptError) as e:
-        decrypt_data(BytesIO(encrypted_data), password)
+        decrypt_data(BytesIO(encrypted_data), password, allow_legacy=True)
     assert str(e.value) == "Incorrect password or invalid data"
 
 

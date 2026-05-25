@@ -153,7 +153,9 @@ try:
         logger.debug(f"Legacy decryption successful ({len(decrypted_data)} bytes)")
         return BytesIO(decrypted_data)
 
-    def decrypt_data(input_stream: BytesIO, password: str) -> BytesIO:
+    def decrypt_data(
+        input_stream: BytesIO, password: str, *, allow_legacy: bool = False
+    ) -> BytesIO:
         """
         Decrypt data that was encrypted using encrypt_data()
         """
@@ -163,6 +165,8 @@ try:
         if not header.startswith(MAGIC_BYTES):
             logger.debug("Attempted to decrypt a non-encrypted stream")
             raise DecryptError("This data does not look to be encrypted")
+        if not allow_legacy:
+            raise DecryptError("Legacy AES-CBC data requires explicit legacy decryption")
         return _decrypt_legacy_cbc(input_stream, password, header[len(MAGIC_BYTES) :])
 
 
@@ -176,5 +180,7 @@ except ImportError as e:
     def encrypt_data(_input_stream: BytesIO, _password: str) -> BytesIO:
         raise EncryptError("Encryption not supported")
 
-    def decrypt_data(_input_stream: BytesIO, _password: str) -> BytesIO:
+    def decrypt_data(
+        _input_stream: BytesIO, _password: str, *, allow_legacy: bool = False
+    ) -> BytesIO:
         raise DecryptError("Decryption not supported")
