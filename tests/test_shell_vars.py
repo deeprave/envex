@@ -55,60 +55,32 @@ NESTED_MULTI=${VAR1:-${VAR2:-${VAR3:-default}}}
     )
 
 
-def test_standard_substitution(monkeypatch):
-    """Test standard variable substitution"""
+@pytest.fixture
+def shell_env(monkeypatch):
     monkeypatch.setattr(envex.dot_env, "open_env", shell_vars_env)
-    env = envex.load_env(search_path=".")
-    assert env["STANDARD"] == "first-value"
+    return envex.load_env(search_path=".", environ={}, update=False)
 
 
-def test_no_braces_substitution(monkeypatch):
-    """Test variable substitution without braces"""
-    monkeypatch.setattr(envex.dot_env, "open_env", shell_vars_env)
-    env = envex.load_env(search_path=".")
-    assert env["NO_BRACES"] == "second-value"
-
-
-def test_default_value(monkeypatch):
-    """Test default value when variable is not set"""
-    monkeypatch.setattr(envex.dot_env, "open_env", shell_vars_env)
-    env = envex.load_env(search_path=".")
-    assert env["DEFAULT_UNSET"] == "default-value"
-    assert env["DEFAULT_SET"] == "first-value"
-
-
-def test_conditional_value(monkeypatch):
-    """Test conditional value when variable is set or not set"""
-    monkeypatch.setattr(envex.dot_env, "open_env", shell_vars_env)
-    env = envex.load_env(search_path=".")
-    assert env["CONDITIONAL_SET"] == "conditional-value"
-    assert env["CONDITIONAL_UNSET"] == ""
-    assert env["CONDITIONAL_EMPTY"] == ""
-
-
-def test_nested_references(monkeypatch):
-    """Test nested variable references"""
-    monkeypatch.setattr(envex.dot_env, "open_env", shell_vars_env)
-    env = envex.load_env(search_path=".")
-    assert env["NESTED"] == "first-value"
-    assert env["NESTED_DEFAULT"] == "second-value"
-    assert env["NESTED_CONDITIONAL"] == "second-value"
-
-
-def test_complex_cases(monkeypatch):
-    """Test complex cases with multiple substitutions"""
-    monkeypatch.setattr(envex.dot_env, "open_env", shell_vars_env)
-    env = envex.load_env(search_path=".")
-    assert env["COMPLEX"] == "prefix-second-value-suffix"
-    assert env["COMPLEX_DEFAULT"] == "second-value-default"
-
-
-def test_multi_level_nested(monkeypatch):
-    """Test multi-level nested variable substitution resolution"""
-
-    monkeypatch.setattr(envex.dot_env, "open_env", shell_vars_env)
-    env = envex.load_env(search_path=".")
-    assert env["NESTED_MULTI"] == "actual"
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("STANDARD", "first-value"),
+        ("NO_BRACES", "second-value"),
+        ("DEFAULT_UNSET", "default-value"),
+        ("DEFAULT_SET", "first-value"),
+        ("CONDITIONAL_SET", "conditional-value"),
+        ("CONDITIONAL_UNSET", ""),
+        ("CONDITIONAL_EMPTY", ""),
+        ("NESTED", "first-value"),
+        ("NESTED_DEFAULT", "second-value"),
+        ("NESTED_CONDITIONAL", "second-value"),
+        ("COMPLEX", "prefix-second-value-suffix"),
+        ("COMPLEX_DEFAULT", "second-value-default"),
+        ("NESTED_MULTI", "actual"),
+    ],
+)
+def test_shell_variable_substitution(shell_env, key, expected):
+    assert shell_env[key] == expected
 
 
 def build_reference_chain(length: int, final_value: str = "resolved") -> dict[str, str]:

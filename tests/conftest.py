@@ -69,8 +69,14 @@ except ImportError:
 
 
 def pytest_configure(config):
-    config.addinivalue_line("markers", "vault: vault module is available")
-    # Register the slow marker
-    pytest.mark.vault = pytest.mark.skipif(
+    config.addinivalue_line("markers", "vault: requires a local Vault test container")
+
+
+def pytest_collection_modifyitems(config, items):
+    _ = config
+    skip_vault = pytest.mark.skipif(
         not use_hvac, reason="Test skipped because hvac_module is not available"
     )
+    for item in items:
+        if "vault" in item.keywords:
+            item.add_marker(skip_vault)

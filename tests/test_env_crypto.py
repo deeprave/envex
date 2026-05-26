@@ -12,20 +12,7 @@ from envex.env_crypto import encrypt_data, decrypt_data, EncryptError, DecryptEr
 
 @pytest.fixture
 def password():
-    # Provide a test password fixture
     return "#pretEnD_stR0ng_pAs$woRd"
-
-
-@pytest.fixture
-def incorrect_password():
-    # Provide an incorrect test password
-    return "wrong_password"
-
-
-@pytest.fixture
-def encrypted_stream_with_invalid_magic_bytes():
-    # Mock BytesIO stream with invalid magic bytes
-    return BytesIO(b"DATA_WITH_INVALID_MAGIC_BYTES")
 
 
 def test_encrypt_data_success(password):
@@ -100,14 +87,14 @@ def test_encrypt_empty_data():
     password = "strongpassword123"
     result = encrypt_data(input_data, password)
     assert isinstance(result, BytesIO)
-    assert len(result.getvalue()) > 0  # Ensure outputs exist even for empty input
+    assert len(result.getvalue()) > 0
 
 
 def test_encrypt_large_data(password):
-    input_data = BytesIO(b"a" * 10**6)  # 1MB of data
+    input_data = BytesIO(b"a" * 10**6)
     result = encrypt_data(input_data, password)
     assert isinstance(result, BytesIO)
-    assert result.getvalue() != b"a" * 10**6  # Ensure data is encrypted
+    assert result.getvalue() != b"a" * 10**6
     assert input_data.getvalue() == decrypt_data(result, password).getvalue()
 
 
@@ -128,8 +115,9 @@ def test_tampered_ciphertext_fails_authentication(password):
     assert str(e.value) == "Incorrect password or invalid data"
 
 
-def test_invalid_magic_bytes(encrypted_stream_with_invalid_magic_bytes, password):
-    # Ensure decryption fails on invalid magic bytes
+def test_invalid_magic_bytes(password):
+    encrypted_stream_with_invalid_magic_bytes = BytesIO(b"DATA_WITH_INVALID_MAGIC_BYTES")
+
     with pytest.raises(DecryptError) as e:
         decrypt_data(encrypted_stream_with_invalid_magic_bytes, password)
     assert "does not look to be encrypted" in str(e.value)
@@ -143,12 +131,12 @@ def test_truncated_authenticated_stream_raises_decrypt_error(password):
     assert "invalid data" in str(e.value)
 
 
-def test_invalid_password(incorrect_password, password):
+def test_invalid_password(password):
     data = b"VALID_ENCRYPTED_DATA"
     encrypted_data = encrypt_data(BytesIO(data), password)
-    # Ensure decryption fails with an incorrect password
+
     with pytest.raises(DecryptError) as e:
-        decrypt_data(encrypted_data, incorrect_password)
+        decrypt_data(encrypted_data, "wrong_password")
     assert "Incorrect password or invalid data" in str(e.value)
 
 
@@ -194,7 +182,6 @@ def test_legacy_cbc_padding_failures_are_generic(password):
 
 
 def test_empty_stream(password):
-    # Test with an empty BytesIO stream
     empty_stream = BytesIO()
     with pytest.raises(DecryptError):
         decrypt_data(empty_stream, password)
