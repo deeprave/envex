@@ -64,6 +64,16 @@ def test_encrypt_data_already_encrypted(password):
         encrypt_data(input_enc, password)
 
 
+def test_encrypt_data_rejects_already_encrypted_input_from_current_position(password):
+    input_enc = encrypt_data(BytesIO(b"Some Test data data"), password)
+    input_enc.seek(1)
+
+    with pytest.raises(EncryptError):
+        encrypt_data(input_enc, password)
+
+    assert input_enc.tell() == 1
+
+
 def test_encrypt_data_rejects_assignment_looking_authenticated_output(
     password, monkeypatch
 ):

@@ -117,9 +117,12 @@ try:
 
     def _has_envex_container_structure(input_stream: BytesIO) -> bool:
         stream_pos = input_stream.tell()
-        header = _read_magic(input_stream)
-        remaining_length = _remaining_length(input_stream)
-        input_stream.seek(stream_pos)
+        try:
+            input_stream.seek(0)
+            header = _read_magic(input_stream)
+            remaining_length = _remaining_length(input_stream)
+        finally:
+            input_stream.seek(stream_pos)
 
         if header == AUTH_MAGIC_BYTES:
             return remaining_length >= AUTH_CONTAINER_MIN_REMAINDER_LENGTH
@@ -153,7 +156,7 @@ try:
 
     def _is_already_encrypted(input_stream: BytesIO, encoding: str) -> bool:
         # The stream has already been normalized by _read_stream(), so the
-        # helper checks below can safely preserve position with seek/tell.
+        # helper checks below can safely probe from offset 0 and restore position.
         # Plaintext dotenv keys such as SECG_KEY can look like a container
         # header. Treat them as plaintext only after a bounded prefix decodes
         # as text; real containers normally contain binary salt/nonce/tag data.
