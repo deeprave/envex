@@ -121,8 +121,14 @@ def build_reference_cycle(length: int) -> dict[str, str]:
     return {f"VAR{i}": f"$VAR{(i + 1) % length}" for i in range(length)}
 
 
+def write_reference_dotenv(tmp_path, references: dict[str, str]) -> None:
+    lines = ["VALUE=$VAR0"]
+    lines.extend(f"{key}={value}" for key, value in references.items())
+    (tmp_path / ".env").write_text("\n".join(lines))
+
+
 @pytest.mark.parametrize(
-    ("environ", "expected"),
+    ("references", "expected"),
     [
         pytest.param(
             build_reference_chain(envex.dot_env.MAX_RECURSION_DEPTH - 1),
@@ -141,5 +147,9 @@ def build_reference_cycle(length: int) -> dict[str, str]:
         ),
     ],
 )
-def test_nested_vars_recursion_depth(environ, expected):
-    assert envex.dot_env._process_nested_vars("$VAR0", environ) == expected
+def test_nested_vars_recursion_depth(tmp_path, references, expected):
+    write_reference_dotenv(tmp_path, references)
+
+    env = envex.load_env(search_path=tmp_path, environ={}, update=False)
+
+    assert env["VALUE"] == expected

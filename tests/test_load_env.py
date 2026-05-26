@@ -151,7 +151,7 @@ def test_missing_env_file_does_not_yield_phantom_path(tmp_path):
 def test_missing_current_working_dir_omits_cwd(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
     env_file.write_text("VALUE=ok\n")
-    monkeypatch.setattr(envex.dot_env, "_current_working_dir", lambda: None)
+    monkeypatch.setattr(envex.dot_env, "current_working_dir", lambda: None)
 
     env = envex.load_env(search_path=tmp_path, environ={}, update=False)
 
@@ -170,7 +170,7 @@ def test_default_search_path_skips_missing_current_working_dir(tmp_path, monkeyp
             raise FileNotFoundError
         return original_resolve(path, *args, **kwargs)
 
-    monkeypatch.setattr(envex.dot_env, "_current_working_dir", lambda: None)
+    monkeypatch.setattr(envex.dot_env, "current_working_dir", lambda: None)
     monkeypatch.setattr(envex.dot_env, "_default_search_path", lambda: [".", tmp_path])
     monkeypatch.setattr(envex.dot_env.Path, "resolve", resolve)
 
