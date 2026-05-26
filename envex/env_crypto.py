@@ -92,9 +92,8 @@ try:
                 input_stream.seek(0)
             except io.UnsupportedOperation:
                 logger.warning(
-                    "Input stream %r does not support seek(0); only bytes from the current "
-                    "position will be processed",
-                    input_stream,
+                    "Input stream does not support seek(0); only bytes from the "
+                    "current position will be processed"
                 )
             data = input_stream.read()
             data = data.encode(encoding) if isinstance(data, str) else data
