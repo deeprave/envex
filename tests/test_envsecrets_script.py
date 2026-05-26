@@ -19,7 +19,15 @@ def test_main_parses_argv_and_writes_env_and_secrets(tmp_path, monkeypatch):
     dotenv = tmp_path / ".env"
     dotenv.write_text("PUBLIC=hello\nSECRET=shh\n")
     template = tmp_path / "template.env"
-    template.write_text("PUBLIC\n|SECRET\nDEFAULT=fallback\n")
+    template.write_text(
+        "PUBLIC\n"
+        "|SECRET\n"
+        "DEFAULT=fallback\n"
+        "COMPOSED=${MISSING:-fallback-$PUBLIC}\n"
+        "NO_BRACES=$PUBLIC\n"
+        "CALLBACK=https://${HOST}/cb\n"
+        "PRICE=cost-$5\n"
+    )
     output = tmp_path / "docker.env"
     captured = []
 
@@ -52,6 +60,10 @@ def test_main_parses_argv_and_writes_env_and_secrets(tmp_path, monkeypatch):
     assert output.read_text().splitlines() == [
         "PUBLIC=hello",
         "DEFAULT=fallback",
+        "COMPOSED=fallback-hello",
+        "NO_BRACES=hello",
+        "CALLBACK=https://${HOST}/cb",
+        "PRICE=cost-$5",
     ]
     assert captured == [
         {

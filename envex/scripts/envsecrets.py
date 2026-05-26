@@ -14,15 +14,14 @@ import argparse
 import re
 import sys
 from collections.abc import Sequence
-from functools import cache
 from pathlib import Path
-from string import Template
 
-from envex.dot_env import load_env
+from envex.dot_env import load_env, substitute_env_vars
 from envex.env_hvac import SecretsManager
 from envex.paths import current_working_dir
 
 SECRET_MARK = "|"
+_SUBSTITUTION_PATTERN = re.compile(r"\$\{|\$[a-zA-Z_][a-zA-Z0-9_]*")
 
 
 def _default_search_path(envfile: str | Path | None) -> list[str | Path]:
@@ -63,34 +62,13 @@ def read_env(
     )
 
 
-@cache
-def cache_regex(rx: str) -> re.Pattern:
-    return re.compile(rx)
-
-
-def env_match(var, regexlist, is_value=False):
-    if regexlist:
-        for regex in regexlist:
-            if (
-                is_value
-                and var == regex
-                or not is_value
-                and cache_regex(regex).match(var)
-            ):
-                break
-        else:
-            return False
-    return True
-
-
 def subst(environ, lines) -> list:
     """post-process the variables using ${substitutions}"""
     data = []
 
     def do_subst(value: str) -> str:
-        if all(v in value for v in ("${", "}")):  # looks like template
-            # ignore anything that doesn't resolve, don't throw an exception.
-            value = Template(value).safe_substitute(environ)
+        if _SUBSTITUTION_PATTERN.search(value):
+            value = substitute_env_vars(value, environ, preserve_missing=True)
         return value
 
     for line in lines:
