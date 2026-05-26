@@ -5,6 +5,7 @@ Type smart wrapper around os.environ
 
 import contextlib
 import inspect
+import os
 import re
 from pathlib import Path
 from io import TextIOBase, BytesIO
@@ -26,6 +27,7 @@ class Env:
     _BOOLEAN_FALSE_STRINGS = frozenset(("", "0", "f", "false", "n", "no", "off"))
     _EXCEPTION_CLS = KeyError
     _LOAD_ENV_KWARGS = frozenset(inspect.signature(load_env).parameters)
+    _SOURCE_KEY = "ENVEX_SOURCE"
 
     def __init__(
         self,
@@ -68,6 +70,8 @@ class Env:
         @param base_path: (optional) str base path for secrets (default=None)
         @param engine: (optional) str vault secrets engine (default=None)
         @param mount_point: (optional) str vault secrets mount point (default=None, determined by engine)
+        Environment values override Vault by default. Set ENVEX_SOURCE=vault
+            to let Vault values override local values.
         @param working_dirs: (optional) bool whether to include PWD/CWD (default=True)
             -
         @param timeout: (optional) int timeout for requests sent to Vault.
@@ -104,7 +108,7 @@ class Env:
             load_env_kwargs["environ"] = self._env
         self.read_streams(*streams, **load_env_kwargs)
         self.set(kwargs)
-        self.env_source = self.env.get("ENVEX_SOURCE", "env") == "env"
+        self.env_source = self._resolve_env_source() == "env"
         vault_verify = (
             verify
             if verify is not None
@@ -167,9 +171,10 @@ class Env:
 
     @staticmethod
     def os_env():
-        import os
-
         return os.environ
+
+    def _resolve_env_source(self) -> str:
+        return self.env.get(self._SOURCE_KEY, "env")
 
     def read_env(self, **kwargs):
         """
@@ -294,8 +299,6 @@ class Env:
         return self.get(var, default)
 
     def export(self, *args, **kwargs):
-        import os
-
         for arg in args:
             if not isinstance(arg, (dict,)):
                 raise TypeError(
@@ -306,15 +309,12 @@ class Env:
             kwargs = self.env
         for k, v in kwargs.items():
             k = str(k)
-            try:
-                if v is None:
-                    self.unset(k)
-                    del os.environ[k]
-                else:
-                    self.set(k, v)
-                    os.environ[k] = str(v)
-            except KeyError:
-                ...
+            if v is None:
+                self.unset(k)
+                os.environ.pop(k, None)
+            else:
+                self.set(k, v)
+                os.environ[k] = str(v)
 
     @classmethod
     def is_true(cls, val):

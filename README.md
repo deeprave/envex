@@ -117,6 +117,8 @@ In addition, Env supports a few HashiCorp Vault configuration parameters as well
 * enable_cache: bool whether to cache values fetched from Vault (default is True)
   This is used to prefix the logical path to the secret, i.e. `f"{base_path}/key"`.
 
+Environment values override Vault values by default. Set `ENVEX_SOURCE=vault` to let Vault values override local environment values.
+
 Some type-smart functions act as an alternative to `Env.get` and having to parse the result:
 ```python
 from envex import env
