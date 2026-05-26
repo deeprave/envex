@@ -2,7 +2,9 @@
 Block data encryption using authenticated AES-256-GCM.
 """
 
+import io
 import logging
+import re
 import secrets
 from io import BytesIO, TextIOBase
 
@@ -18,7 +20,15 @@ SALT_LENGTH = 16
 LEGACY_IV_LENGTH = 16
 GCM_NONCE_LENGTH = 12
 GCM_TAG_LENGTH = 16
+AUTH_CONTAINER_MIN_REMAINDER_LENGTH = SALT_LENGTH + GCM_NONCE_LENGTH + GCM_TAG_LENGTH
+LEGACY_CONTAINER_REMAINDER_HEADER_LENGTH = SALT_LENGTH + LEGACY_IV_LENGTH
 DECRYPT_ERROR_MESSAGE = "Incorrect password or invalid data"
+AUTH_MAGIC_PREFIX = AUTH_MAGIC_BYTES.decode("ascii")
+MAGIC_PREFIX = MAGIC_BYTES.decode("ascii")
+TEXT_PROBE_BYTES = 1024
+# Only direct KEY= lines can collide with the magic bytes at offset 0. Dotenv
+# forms such as "export KEY=..." do not need special handling here.
+_DOTENV_ASSIGNMENT_PREFIX_PATTERN = re.compile(r"^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=")
 
 logger = logging.getLogger(__file__)
 
@@ -78,7 +88,14 @@ try:
 
     def _read_stream(input_stream: BytesIO | TextIOBase, encoding: str) -> BytesIO:
         if not isinstance(input_stream, BytesIO):
-            input_stream.seek(0)
+            try:
+                input_stream.seek(0)
+            except io.UnsupportedOperation:
+                logger.warning(
+                    "Input stream %r does not support seek(0); only bytes from the current "
+                    "position will be processed",
+                    input_stream,
+                )
             data = input_stream.read()
             data = data.encode(encoding) if isinstance(data, str) else data
             input_stream = BytesIO(data)
@@ -93,6 +110,59 @@ try:
     def _read_magic(input_stream: BytesIO) -> bytes:
         return input_stream.read(len(MAGIC_BYTES))
 
+    def _remaining_length(input_stream: BytesIO) -> int:
+        """Return remaining bytes for streams normalized to seekable BytesIO."""
+        assert isinstance(input_stream, BytesIO)
+        start_pos = input_stream.tell()
+        return len(input_stream.getbuffer()) - start_pos
+
+    def _has_envex_container_structure(input_stream: BytesIO) -> bool:
+        stream_pos = input_stream.tell()
+        header = _read_magic(input_stream)
+        remaining_length = _remaining_length(input_stream)
+        input_stream.seek(stream_pos)
+
+        if header == AUTH_MAGIC_BYTES:
+            return remaining_length >= AUTH_CONTAINER_MIN_REMAINDER_LENGTH
+        if header == MAGIC_BYTES:
+            if remaining_length < LEGACY_CONTAINER_REMAINDER_HEADER_LENGTH:
+                return False
+            encrypted_length = remaining_length - LEGACY_CONTAINER_REMAINDER_HEADER_LENGTH
+            return encrypted_length > 0 and encrypted_length % AES.block_size == 0
+        return False
+
+    def _looks_like_magic_prefix_dotenv_assignment(
+        input_stream: BytesIO, encoding: str
+    ) -> bool:
+        stream_pos = input_stream.tell()
+        try:
+            input_stream.seek(0)
+            text = input_stream.read(TEXT_PROBE_BYTES).decode(encoding)
+        except UnicodeDecodeError:
+            return False
+        finally:
+            input_stream.seek(stream_pos)
+        newline_index = text.find("\n")
+        line = text if newline_index == -1 else text[:newline_index]
+        match = _DOTENV_ASSIGNMENT_PREFIX_PATTERN.match(line)
+        if match is None:
+            return False
+        key = match.group(1)
+        return key.startswith(f"{AUTH_MAGIC_PREFIX}_") or key.startswith(
+            f"{MAGIC_PREFIX}_"
+        )
+
+    def _is_already_encrypted(input_stream: BytesIO, encoding: str) -> bool:
+        # The stream has already been normalized by _read_stream(), so the
+        # helper checks below can safely preserve position with seek/tell.
+        # Plaintext dotenv keys such as SECG_KEY can look like a container
+        # header. Treat them as plaintext only after a bounded prefix decodes
+        # as text; real containers normally contain binary salt/nonce/tag data.
+        if _looks_like_magic_prefix_dotenv_assignment(input_stream, encoding):
+            return False
+        # For all other cases, rely on envex container structure.
+        return _has_envex_container_structure(input_stream)
+
     def encrypt_data(
         input_stream: BytesIO | TextIOBase, password: str, encoding: str = "utf-8"
     ) -> BytesIO:
@@ -100,15 +170,13 @@ try:
         Encrypt a file using AES-256-GCM with a password-derived key.
         """
         input_stream = _read_stream(input_stream, encoding)
-        first_bytes = _read_magic(input_stream)
-        if first_bytes in (MAGIC_BYTES, AUTH_MAGIC_BYTES):
-            logger.debug("Attempted to encrypt an already encrypted stream")
-            raise EncryptError("This data is already encrypted")
-        input_stream.seek(0)
-
         if not password:
             logger.debug("No or blank password provided")
             raise EncryptError("No or blank password provided")
+        if _is_already_encrypted(input_stream, encoding):
+            logger.debug("Attempted to encrypt an already encrypted stream")
+            raise EncryptError("This data is already encrypted")
+        input_stream.seek(0)
 
         key, salt = generate_key_from_password(password)
 
