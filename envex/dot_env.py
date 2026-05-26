@@ -232,7 +232,7 @@ def _process_env(
 def _process_var_reference(
     var_name: str, environ: MutableMapping[str, str], preserve_missing: bool = False
 ) -> str:
-    """Process a variable reference and return its value or empty string if not found"""
+    """Resolve a variable reference, optionally preserving missing references."""
     if preserve_missing and var_name not in environ:
         return f"${var_name}"
     return environ.get(var_name, "")

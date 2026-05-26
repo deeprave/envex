@@ -63,7 +63,7 @@ def read_env(
 
 
 def subst(environ, lines) -> list:
-    """post-process the variables using ${substitutions}"""
+    """Post-process template values using dotenv-style variable substitution."""
     data = []
 
     def do_subst(value: str) -> str:
