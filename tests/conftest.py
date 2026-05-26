@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import pytest
 
+VAULT_UNAVAILABLE_REASON = "Test skipped because Vault test dependencies are unavailable"
+
 try:
     import hvac
     from hvac.exceptions import InvalidRequest
@@ -67,6 +69,14 @@ try:
 except ImportError:
     use_hvac = False
 
+    @pytest.fixture(scope="session")
+    def vault():
+        pytest.skip(VAULT_UNAVAILABLE_REASON)
+
+    @pytest.fixture(scope="session")
+    def vault_client():
+        pytest.skip(VAULT_UNAVAILABLE_REASON)
+
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "vault: requires a local Vault test container")
@@ -74,9 +84,7 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     _ = config
-    skip_vault = pytest.mark.skipif(
-        not use_hvac, reason="Test skipped because hvac_module is not available"
-    )
+    skip_vault = pytest.mark.skipif(not use_hvac, reason=VAULT_UNAVAILABLE_REASON)
     for item in items:
         if "vault" in item.keywords:
             item.add_marker(skip_vault)
