@@ -46,6 +46,7 @@ def log_set_level(level: int | None = None):
     :return: The loggging level that was set.
     :rtype: int
     """
+    global __current_level
     if level is None:
         level = __default_level
     else:
@@ -55,6 +56,7 @@ def log_set_level(level: int | None = None):
             level = len(__levelIndex) - 1
         level = __levelIndex[level]
     logging.getLogger().setLevel(level)
+    __current_level = level
     return level
 
 
