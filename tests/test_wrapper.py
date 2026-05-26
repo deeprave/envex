@@ -375,6 +375,49 @@ def test_env_source_uses_canonical_variable_for_vault_precedence(monkeypatch):
     assert env.get("SECRET") == "vault"
 
 
+@pytest.mark.parametrize("source", ["vault", " Vault ", "VAULT"])
+def test_env_source_normalizes_vault_precedence(source, monkeypatch):
+    class FakeSecretsManager:
+        def __init__(self, **_kwargs):
+            pass
+
+        def get_secret(self, key, default=None):
+            return {"SECRET": "vault"}.get(key, default)
+
+    monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
+
+    env = envex.Env(environ={"ENVEX_SOURCE": source, "SECRET": "env"})
+
+    assert env.get("SECRET") == "vault"
+
+
+@pytest.mark.parametrize("source", ["env", " ENV ", "ENV"])
+def test_env_source_normalizes_env_precedence(source, monkeypatch):
+    class FakeSecretsManager:
+        def __init__(self, **_kwargs):
+            pass
+
+        def get_secret(self, key, default=None):
+            return {"SECRET": "vault"}.get(key, default)
+
+    monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
+
+    env = envex.Env(environ={"ENVEX_SOURCE": source, "SECRET": "env"})
+
+    assert env.get("SECRET") == "env"
+
+
+def test_invalid_env_source_raises_value_error_before_vault_init(monkeypatch):
+    class FakeSecretsManager:
+        def __init__(self, **_kwargs):
+            raise AssertionError("SecretsManager should not be initialized")
+
+    monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
+
+    with pytest.raises(ValueError, match="Invalid ENVEX_SOURCE value"):
+        envex.Env(environ={"ENVEX_SOURCE": "treu"})
+
+
 def test_env_list(monkeypatch):
     monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
     env = envex.Env(readenv=True)
