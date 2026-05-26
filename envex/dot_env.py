@@ -175,8 +175,10 @@ def _process_line(_lineno: int, string: str, errors: bool, _env_path: Path | Non
     """
     Process a single dotenv line.
 
-    Returns a setter plus parsed key and value. Non-assignment lines can return
-    None for the value, and callers must skip them before invoking the setter.
+    Returns a setter plus parsed key and value. Lines without a parsed key
+    return ``None`` for the key, and callers must skip those before invoking
+    the setter. Bare keys can return ``None`` for the value; setter helpers
+    treat those as no-ops.
     """
     _func, _key, _val = _set_env_default_if_needed, None, None
     parts = string.split("=", 1)
