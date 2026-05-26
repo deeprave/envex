@@ -220,6 +220,23 @@ def test_load_env_overwrite(monkeypatch, envmap):
     assert env["COMBINED"] == "first-value:alternative-third:fifth-value"
 
 
+def test_load_env_accepts_bytes_search_path(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("FROM_BYTES=ok\n")
+
+    env = envex.load_env(
+        search_path=tmp_path.as_posix().encode(),
+        environ={},
+        update=False,
+    )
+
+    assert env["FROM_BYTES"] == "ok"
+
+
+def test_filesystem_path_decode_uses_surrogateescape():
+    assert envex.dot_env._decode_filesystem_path(b"\xff")
+
+
 def test_quoted_value(monkeypatch, envmap):
     monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
     env = envex.load_env(search_path=__file__, environ=envmap)

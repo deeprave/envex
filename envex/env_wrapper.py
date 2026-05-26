@@ -9,7 +9,8 @@ import os
 import re
 from pathlib import Path
 from io import TextIOBase, BytesIO
-from typing import Any, MutableMapping, Type
+from collections.abc import MutableMapping
+from typing import Any
 
 from envex.env_hvac import SecretsManager
 
@@ -21,7 +22,7 @@ class Env:
     Wrapper around os.environ with .env enhancement` and django support
     """
 
-    _exception: Type[Exception]
+    _exception: type[Exception]
 
     _BOOLEAN_TRUE_STRINGS = frozenset(("1", "en", "ok", "on", "t", "true", "y", "yes"))
     _BOOLEAN_FALSE_STRINGS = frozenset(("", "0", "f", "false", "n", "no", "off"))
@@ -34,7 +35,7 @@ class Env:
         self,
         *args,
         environ: MutableMapping[str, str] | None = None,
-        exception: Type[Exception] | None = None,
+        exception: type[Exception] | None = None,
         readenv: bool = False,
         url: str | None = None,
         token: str | None = None,
@@ -56,7 +57,7 @@ class Env:
         @param password: password to use for decryption
             - if readenv=True, the following additional args may be used
             @param env_file: str name of the environment file (.env or $ENV default)
-            @param search_path: None | Union[List[str], List[Path]], str] path(s) to search for env_file
+            @param search_path: str | Path | list[str | Path] | None path(s) to search for env_file
             @param overwrite: bool whether to overwrite existing environment variables (default=False)
             @param parents: bool whether to search parent directories for env_file (default=False)
             @param update: bool whether to update os.environ with values from env_file (default=False)
@@ -184,7 +185,7 @@ class Env:
         """
         :param kwargs: see load_env
             env_file: str
-            search_path: Union[None, Union[List[str], List[Path]], str]
+            search_path: str | Path | list[str | Path] | None
             overwrite: bool
             parents: bool
             update: bool
@@ -208,11 +209,11 @@ class Env:
             load_stream(stream, environ, overwrite, errors, decrypt, password, encoding)
 
     @property
-    def exception(self) -> Type[Exception]:
+    def exception(self) -> type[Exception]:
         return self._exception
 
     @exception.setter
-    def exception(self, exc: Type[Exception]):
+    def exception(self, exc: type[Exception]):
         self._exception = exc
 
     def get(self, var: str, default=None):

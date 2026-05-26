@@ -6,10 +6,6 @@ import logging
 import secrets
 from io import BytesIO, TextIOBase
 
-__all__ = ("encrypt_data", "decrypt_data", "EncryptError", "DecryptError")
-
-from typing import Union
-
 # Magic bytes to identify encrypted files. The legacy prefix is retained so
 # existing AES-CBC files can still be detected and decrypted.
 MAGIC_BYTES = b"SECF"  # "Secure Encrypted File"
@@ -25,6 +21,8 @@ GCM_TAG_LENGTH = 16
 DECRYPT_ERROR_MESSAGE = "Incorrect password or invalid data"
 
 logger = logging.getLogger(__file__)
+
+__all__ = ("encrypt_data", "decrypt_data", "EncryptError", "DecryptError")
 
 
 class DecryptError(ValueError):
@@ -78,7 +76,7 @@ try:
         )
         return key, salt
 
-    def _read_stream(input_stream: Union[BytesIO, TextIOBase], encoding: str) -> BytesIO:
+    def _read_stream(input_stream: BytesIO | TextIOBase, encoding: str) -> BytesIO:
         if not isinstance(input_stream, BytesIO):
             input_stream.seek(0)
             data = input_stream.read()
@@ -96,7 +94,7 @@ try:
         return input_stream.read(len(MAGIC_BYTES))
 
     def encrypt_data(
-        input_stream: Union[BytesIO, TextIOBase], password: str, encoding: str = "utf-8"
+        input_stream: BytesIO | TextIOBase, password: str, encoding: str = "utf-8"
     ) -> BytesIO:
         """
         Encrypt a file using AES-256-GCM with a password-derived key.
@@ -173,14 +171,15 @@ try:
         return _decrypt_legacy_cbc(input_stream, password)
 
 
-except ImportError as e:
-    once = False
-    if not once:
-        once = True
-        logger.warning("Crypto module not found, encryption not available")
-        logger.exception(e)
+except ImportError:
+    logger.warning("Crypto module not found, encryption and decryption are not available")
+    logger.debug("Crypto import failure", exc_info=True)
 
-    def encrypt_data(_input_stream: BytesIO, _password: str) -> BytesIO:
+    def encrypt_data(
+        _input_stream: BytesIO | TextIOBase,
+        _password: str,
+        encoding: str = "utf-8",
+    ) -> BytesIO:
         raise EncryptError("Encryption not supported")
 
     def decrypt_data(

@@ -4,17 +4,10 @@ import os
 import sys
 import contextlib
 import re
+from collections.abc import Generator, MutableMapping, Sequence
 from io import TextIOBase, BytesIO, BufferedReader
 from pathlib import Path
-from typing import (
-    Dict,
-    List,
-    MutableMapping,
-    Union,
-    Optional,
-    Any,
-    Generator,
-)
+from typing import Any
 
 from .env_crypto import AUTH_MAGIC_BYTES, MAGIC_BYTES, decrypt_data, DecryptError
 
@@ -46,7 +39,7 @@ def unquote(line, quotes="\"'"):
     return line
 
 
-def update_env(env: MutableMapping[str, str], mapping: Dict):
+def update_env(env: MutableMapping[str, str], mapping: dict):
     for k, v in mapping.items():
         env[str(k)] = str(v)
 
@@ -66,11 +59,11 @@ def _env_export(
 
 
 def _env_files(
-    env_file: str, search_path: List[Path], parents: bool, decrypt: bool, errors: bool
+    env_file: str, search_path: list[Path], parents: bool, decrypt: bool, errors: bool
 ) -> Generator[str, Any, None]:
     """expand env_file with the full search path, optionally parents as well"""
 
-    def resolve_file(base_path: Path, name: str, _decrypt: bool) -> Optional[str]:
+    def resolve_file(base_path: Path, name: str, _decrypt: bool) -> str | None:
         """Returns the path to the env file, prioritising the encrypted version if enabled"""
 
         def readable(path: str) -> bool:
@@ -125,7 +118,7 @@ def _env_files(
 
 
 @contextlib.contextmanager
-def open_env(path: Union[str, Path]) -> Generator[BufferedReader, Any, None]:
+def open_env(path: str | Path) -> Generator[BufferedReader, Any, None]:
     """same as open, allow monkeypatch"""
     fp = open(path, "rb")
     try:
@@ -175,14 +168,14 @@ def _process_stream(
 
 def _process_env(
     env_file: str,
-    search_path: List[Path],
+    search_path: list[Path],
     environ: MutableMapping[str, str],
     overwrite: bool,
     parents: bool,
     errors: bool,
     working_dirs: bool,
     decrypt: bool,
-    password: Optional[str] = None,
+    password: str | None = None,
     encoding: str = DEFAULT_ENCODING,
 ) -> MutableMapping[str, str]:
     """
@@ -341,9 +334,14 @@ def _default_search_path() -> list[str]:
         del frame
 
 
+def _decode_filesystem_path(path: bytes) -> str:
+    fs_encoding = sys.getfilesystemencoding() or "utf-8"
+    return path.decode(fs_encoding, errors="surrogateescape")
+
+
 def load_env(
     env_file: str | Path | None = None,
-    search_path: Union[None, Union[List[str], List[Path]], str] = None,
+    search_path: str | bytes | Path | Sequence[str | bytes | Path] | None = None,
     environ: MutableMapping[str, str] | None = None,
     overwrite: bool = False,
     parents: bool = False,
@@ -381,23 +379,30 @@ def load_env(
 
     # determine where to search
     if search_path is None:
-        search_path = _default_search_path()
+        search_paths = _default_search_path()
     elif isinstance(search_path, Path):
-        search_path = [search_path]
-    elif isinstance(search_path, (str, bytes)):
-        search_path = search_path.split(os.pathsep)
+        search_paths = [search_path]
+    elif isinstance(search_path, bytes):
+        search_paths = _decode_filesystem_path(search_path).split(os.pathsep)
+    elif isinstance(search_path, str):
+        search_paths = search_path.split(os.pathsep)
+    else:
+        search_paths = search_path
     # convert to the array of Path for use internally
-    search_path = [Path(p) for p in search_path]
+    resolved_search_path = [
+        Path(_decode_filesystem_path(p) if isinstance(p, bytes) else p)
+        for p in search_paths
+    ]
     # if overwriting, traverse the path in reverse order so the first .env files have priority
     if overwrite:
-        search_path.reverse()
+        resolved_search_path.reverse()
 
     # slurp up the environment files found and
     # post-process values for template variables
     environ = _post_process(
         _process_env(
             env_file,
-            search_path,
+            resolved_search_path,
             dict(environ),
             overwrite,
             parents,
@@ -413,14 +418,14 @@ def load_env(
 
 
 def load_stream(
-    stream: Union[BytesIO, TextIOBase],
+    stream: BytesIO | TextIOBase,
     environ: MutableMapping[str, str] | None = None,
     overwrite: bool = False,
     errors: bool = False,
     decrypt: bool = False,
-    password: Optional[str] = None,
+    password: str | None = None,
     encoding: str = DEFAULT_ENCODING,
-    env_path: Optional[Path] = None,
+    env_path: Path | None = None,
 ):
     if environ is None:
         environ = os.environ
@@ -444,7 +449,7 @@ def load_stream(
     _process_stream(stream, environ, overwrite, errors, encoding, env_path)
 
 
-def _is_encrypted_env_path(env_path: Optional[Path]) -> bool:
+def _is_encrypted_env_path(env_path: Path | None) -> bool:
     return env_path is not None and env_path.name.endswith(ENCRYPTED_EXT)
 
 

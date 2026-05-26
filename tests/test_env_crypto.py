@@ -1,6 +1,9 @@
 # tests/test_env_crypto.py
 
+import builtins
+import importlib.util
 from io import BytesIO, StringIO
+from pathlib import Path
 
 import pytest
 import envex.env_crypto as env_crypto
@@ -67,6 +70,29 @@ def test_encrypt_data_value_error_raises_encrypt_error(password, monkeypatch):
     with pytest.raises(EncryptError) as e:
         encrypt_data(BytesIO(b"test data"), password)
     assert str(e.value) == "Encryption failed"
+
+
+def test_crypto_import_fallback_raises_clear_errors(monkeypatch):
+    real_import = builtins.__import__
+
+    def blocked_crypto_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name.startswith("Crypto"):
+            raise ImportError("blocked crypto import")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", blocked_crypto_import)
+    module_path = Path(env_crypto.__file__)
+    spec = importlib.util.spec_from_file_location(
+        "env_crypto_without_crypto", module_path
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    with pytest.raises(module.EncryptError, match="Encryption not supported"):
+        module.encrypt_data(BytesIO(b"test data"), "password", encoding="utf-8")
+    with pytest.raises(module.DecryptError, match="Decryption not supported"):
+        module.decrypt_data(BytesIO(b"test data"), "password")
 
 
 def test_encrypt_empty_data():
