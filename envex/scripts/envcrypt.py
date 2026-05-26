@@ -7,6 +7,7 @@ import os
 import sys
 import logging
 import string
+from collections.abc import Sequence
 from io import BytesIO
 from pathlib import Path
 
@@ -52,7 +53,7 @@ def check_password_simple(password: str) -> bool:
     return any((pattern in password.lower() for pattern in repeated_patterns))
 
 
-def main():
+def main(argv: Sequence[str] | None = None) -> None:
     import io
     import argparse
 
@@ -140,7 +141,7 @@ def main():
         "output", nargs="?", default=None, action="store", help="Output file (optional)"
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
     if not (_password := args.password):
         if args.environ:

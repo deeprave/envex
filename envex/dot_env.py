@@ -16,6 +16,7 @@ __all__ = (
     "load_env",
     "load_stream",
     "load_dotenv",  # alias
+    "substitute_env_vars",
     "update_env",
     "unquote",
 )
@@ -228,12 +229,18 @@ def _process_env(
     return environ
 
 
-def _process_var_reference(var_name: str, environ: MutableMapping[str, str]) -> str:
+def _process_var_reference(
+    var_name: str, environ: MutableMapping[str, str], preserve_missing: bool = False
+) -> str:
     """Process a variable reference and return its value or empty string if not found"""
+    if preserve_missing and var_name not in environ:
+        return f"${var_name}"
     return environ.get(var_name, "")
 
 
-def _process_shell_var(match_obj, environ: MutableMapping[str, str]) -> str:
+def _process_shell_var(
+    match_obj, environ: MutableMapping[str, str], preserve_missing: bool = False
+) -> str:
     """
     Process shell-like variable substitution patterns:
     ${VAR} - Standard variable substitution
@@ -251,7 +258,7 @@ def _process_shell_var(match_obj, environ: MutableMapping[str, str]) -> str:
             var_name, modifier, value = parts
 
             # Process any nested variable references in the value
-            value = _process_nested_vars(value, environ)
+            value = _process_nested_vars(value, environ, preserve_missing)
 
             var_value = _process_var_reference(var_name, environ)
             if modifier == "-" and not var_value or modifier == "+" and var_value:
@@ -265,27 +272,45 @@ def _process_shell_var(match_obj, environ: MutableMapping[str, str]) -> str:
                 return ""
 
     # Standard variable substitution
+    if preserve_missing and var_name not in environ:
+        return match_obj.group(0)
     return _process_var_reference(var_name, environ)
 
 
 MAX_RECURSION_DEPTH = 12
 
 
-def _substitute_vars(value: str, environ: MutableMapping[str, str]) -> str:
-    value = _VAR_BRACES_PATTERN.sub(lambda m: _process_shell_var(m, environ), value)
+def _substitute_vars(
+    value: str, environ: MutableMapping[str, str], preserve_missing: bool = False
+) -> str:
+    value = _VAR_BRACES_PATTERN.sub(
+        lambda m: _process_shell_var(m, environ, preserve_missing), value
+    )
     value = _VAR_NO_BRACES_PATTERN.sub(
-        lambda m: _process_var_reference(m.group(1), environ), value
+        lambda m: _process_var_reference(m.group(1), environ, preserve_missing), value
     )
     return value
 
 
-def _process_nested_vars(value: str, environ: MutableMapping[str, str]) -> str:
+def _process_nested_vars(
+    value: str, environ: MutableMapping[str, str], preserve_missing: bool = False
+) -> str:
     for _ in range(MAX_RECURSION_DEPTH):
-        new_value = _substitute_vars(value, environ)
+        new_value = _substitute_vars(value, environ, preserve_missing)
         if new_value == value:
             break
         value = new_value
     return value
+
+
+def substitute_env_vars(
+    value: str,
+    environ: MutableMapping[str, str],
+    *,
+    preserve_missing: bool = False,
+) -> str:
+    """Resolve dotenv-style variable references in a string."""
+    return _process_nested_vars(value, environ, preserve_missing)
 
 
 def _post_process(environ: MutableMapping[str, str]) -> MutableMapping[str, str]:

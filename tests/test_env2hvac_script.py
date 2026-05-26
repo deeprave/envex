@@ -1,4 +1,5 @@
 import logging
+import sys
 
 import pytest
 
@@ -10,6 +11,16 @@ Forbidden = type("Forbidden", (Exception,), {"__module__": "hvac.exceptions"})
 class NoopSecretsManager:
     def __init__(self, **kwargs):
         pass
+
+
+def test_main_supports_console_script_help(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["env2hvac", "--help"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        env2hvac.main()
+
+    assert exc_info.value.code == 0
+    assert "usage:" in capsys.readouterr().out
 
 
 def install_fake_secrets_manager(

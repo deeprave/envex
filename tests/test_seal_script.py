@@ -5,6 +5,16 @@ import pytest
 from envex.scripts import seal
 
 
+def test_main_supports_console_script_help(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["seal", "--help"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        seal.main()
+
+    assert exc_info.value.code == 0
+    assert "usage:" in capsys.readouterr().out
+
+
 @pytest.mark.parametrize(
     ("sealed", "expected_status"),
     [
