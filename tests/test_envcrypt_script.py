@@ -67,6 +67,59 @@ def test_main_encrypts_and_decrypts_files(tmp_path):
     assert decrypted_file.read_text() == "VALUE=ok\n"
 
 
+@pytest.mark.parametrize("line_ending", ["\n", "\r\n"])
+def test_main_strips_password_file_line_endings(tmp_path, line_ending):
+    input_file = tmp_path / ".env"
+    encrypted_file = tmp_path / ".env.enc"
+    decrypted_file = tmp_path / ".env.out"
+    password_file = tmp_path / "password.txt"
+    input_file.write_text("VALUE=ok\n")
+    password_file.write_text(f"{PASSWORD}{line_ending}")
+
+    envcrypt.main(
+        ["--encrypt", "--password", PASSWORD, str(input_file), str(encrypted_file)]
+    )
+    envcrypt.main(
+        [
+            "--decrypt",
+            "--file",
+            str(password_file),
+            str(encrypted_file),
+            str(decrypted_file),
+        ]
+    )
+
+    assert decrypted_file.read_text() == "VALUE=ok\n"
+
+
+@pytest.mark.parametrize("trailing_whitespace", [" ", "\t"])
+def test_main_preserves_password_file_trailing_non_line_whitespace(
+    tmp_path, trailing_whitespace
+):
+    input_file = tmp_path / ".env"
+    encrypted_file = tmp_path / ".env.enc"
+    decrypted_file = tmp_path / ".env.out"
+    password_file = tmp_path / "password.txt"
+    password = f"{PASSWORD}{trailing_whitespace}"
+    input_file.write_text("VALUE=ok\n")
+    password_file.write_text(f"{password}\n")
+
+    envcrypt.main(
+        ["--encrypt", "--password", password, str(input_file), str(encrypted_file)]
+    )
+    envcrypt.main(
+        [
+            "--decrypt",
+            "--file",
+            str(password_file),
+            str(encrypted_file),
+            str(decrypted_file),
+        ]
+    )
+
+    assert decrypted_file.read_text() == "VALUE=ok\n"
+
+
 def test_main_removes_input_after_successful_conversion(tmp_path):
     input_file = tmp_path / ".env"
     encrypted_file = tmp_path / ".env.enc"

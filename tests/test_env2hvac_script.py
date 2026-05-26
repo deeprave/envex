@@ -155,3 +155,57 @@ def test_handler_logs_success_after_write(tmp_path, monkeypatch, caplog):
         env2hvac.handler([str(env_file)], namespace="myapp", environ="prod")
 
     assert "Added or updated" not in caplog.text
+
+
+def test_handler_fails_when_explicit_input_file_is_missing(tmp_path, monkeypatch, caplog):
+    missing_file = tmp_path / "missing.env"
+    instances = install_fake_secrets_manager(monkeypatch)
+    caplog.set_level(logging.CRITICAL)
+
+    with pytest.raises(SystemExit) as exc_info:
+        env2hvac.handler([str(missing_file)], namespace="myapp", environ="prod")
+
+    assert exc_info.value.code == 1
+    assert instances == []
+    assert f"{missing_file}: input file does not exist" in caplog.text
+
+
+def test_handler_validates_all_input_files_before_writing(tmp_path, monkeypatch, caplog):
+    env_file = tmp_path / ".env"
+    env_file.write_text("PUBLIC=hello\n")
+    missing_file = tmp_path / "missing.env"
+    instances = install_fake_secrets_manager(monkeypatch)
+    caplog.set_level(logging.CRITICAL)
+
+    with pytest.raises(SystemExit) as exc_info:
+        env2hvac.handler(
+            [str(env_file), str(missing_file)], namespace="myapp", environ="prod"
+        )
+
+    assert exc_info.value.code == 1
+    assert instances == []
+    assert f"{missing_file}: input file does not exist" in caplog.text
+
+
+def test_handler_fails_when_explicit_input_file_is_unreadable(
+    tmp_path, monkeypatch, caplog
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text("PUBLIC=hello\n")
+    instances = install_fake_secrets_manager(monkeypatch)
+    real_open = open
+
+    def fake_open(path, *args, **kwargs):
+        if path == str(env_file):
+            raise PermissionError(13, "permission denied", str(env_file))
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(env2hvac, "open", fake_open, raising=False)
+    caplog.set_level(logging.CRITICAL)
+
+    with pytest.raises(SystemExit) as exc_info:
+        env2hvac.handler([str(env_file)], namespace="myapp", environ="prod")
+
+    assert exc_info.value.code == 1
+    assert instances == []
+    assert f"{env_file}: input file is not readable" in caplog.text
