@@ -2,6 +2,7 @@
 import contextlib
 import io
 
+import pytest
 
 import envex
 
@@ -108,3 +109,37 @@ def test_multi_level_nested(monkeypatch):
     monkeypatch.setattr(envex.dot_env, "open_env", shell_vars_env)
     env = envex.load_env(search_path=".")
     assert env["NESTED_MULTI"] == "actual"
+
+
+def build_reference_chain(length: int, final_value: str = "resolved") -> dict[str, str]:
+    environ = {f"VAR{i}": f"$VAR{i + 1}" for i in range(length)}
+    environ[f"VAR{length}"] = final_value
+    return environ
+
+
+def build_reference_cycle(length: int) -> dict[str, str]:
+    return {f"VAR{i}": f"$VAR{(i + 1) % length}" for i in range(length)}
+
+
+@pytest.mark.parametrize(
+    ("environ", "expected"),
+    [
+        pytest.param(
+            build_reference_chain(envex.dot_env.MAX_RECURSION_DEPTH - 1),
+            "resolved",
+            id="resolves-below-limit",
+        ),
+        pytest.param(
+            build_reference_chain(envex.dot_env.MAX_RECURSION_DEPTH),
+            f"$VAR{envex.dot_env.MAX_RECURSION_DEPTH}",
+            id="stops-at-limit",
+        ),
+        pytest.param(
+            build_reference_cycle(envex.dot_env.MAX_RECURSION_DEPTH),
+            "$VAR0",
+            id="cycle-stops-at-limit",
+        ),
+    ],
+)
+def test_nested_vars_recursion_depth(environ, expected):
+    assert envex.dot_env._process_nested_vars("$VAR0", environ) == expected

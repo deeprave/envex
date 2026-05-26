@@ -148,6 +148,39 @@ def test_missing_env_file_does_not_yield_phantom_path(tmp_path):
     assert "PWD" not in env
 
 
+def test_missing_current_working_dir_omits_cwd(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("VALUE=ok\n")
+    monkeypatch.setattr(envex.dot_env, "_current_working_dir", lambda: None)
+
+    env = envex.load_env(search_path=tmp_path, environ={}, update=False)
+
+    assert env["VALUE"] == "ok"
+    assert "CWD" not in env
+    assert env["PWD"] == tmp_path.as_posix()
+
+
+def test_default_search_path_skips_missing_current_working_dir(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("VALUE=ok\n")
+    original_resolve = envex.dot_env.Path.resolve
+
+    def resolve(path, *args, **kwargs):
+        if str(path) == ".":
+            raise FileNotFoundError
+        return original_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(envex.dot_env, "_current_working_dir", lambda: None)
+    monkeypatch.setattr(envex.dot_env, "_default_search_path", lambda: [".", tmp_path])
+    monkeypatch.setattr(envex.dot_env.Path, "resolve", resolve)
+
+    env = envex.load_env(environ={}, update=False)
+
+    assert env["VALUE"] == "ok"
+    assert "CWD" not in env
+    assert env["PWD"] == tmp_path.as_posix()
+
+
 def test_missing_env_file_errors_true_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         envex.load_env(
