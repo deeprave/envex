@@ -132,7 +132,7 @@ def prepare_public_output_and_secrets(
 def output_result(lines: list[str], outputfile: str) -> None:
     def writelines(fp, name, _lines):
         for line in _lines:
-            print(line, file=fp)
+            fp.write(f"{line}\n")
         linecount = len(_lines)
         print(
             f"{name}: {linecount} line{'' if linecount == 1 else 's'} written",
