@@ -140,7 +140,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 logger.error(f"{parser.prog}: {args.environ} is not set or is empty")
                 exit(2)
         elif args.file:
-            _password = Path(args.file).read_text()
+            _password = Path(args.file).read_text().rstrip("\r\n")
         elif sys.stdin.isatty():
             import getpass
 

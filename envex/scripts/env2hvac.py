@@ -36,6 +36,25 @@ def _load_existing_secrets(sm: SecretsManager, path: str) -> None:
         )
 
 
+def _validate_input_files(files: list[str]) -> list[str]:
+    expanded_files = []
+    for filename in files:
+        expanded = expand(filename)
+        if not os.path.isfile(expanded):
+            fatal(f"{expanded}: input file does not exist", exc_info=False, exitcode=1)
+        try:
+            with open(expanded, "rb"):
+                pass
+        except OSError as exc:
+            fatal(
+                f"{expanded}: input file is not readable: {exc.strerror}",
+                exc_info=False,
+                exitcode=1,
+            )
+        expanded_files.append(expanded)
+    return expanded_files
+
+
 def handler(
     files: list[str],
     url: str | None = None,
@@ -46,6 +65,7 @@ def handler(
     namespace: str | None = None,
     environ: str | None = None,
 ):
+    files = _validate_input_files(files)
     sm = SecretsManager(url=url, token=token, cert=cert, verify=verify)
     if unseal:
         sm.unseal(keys=unseal.split(","), root_token=token)
@@ -61,7 +81,6 @@ def handler(
         path = sm.join(namespace, environ)
         _load_existing_secrets(sm, path)
         for filename in files:
-            filename = expand(filename)
             try:
                 env = envex.Env(
                     readenv=True,
