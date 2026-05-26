@@ -54,7 +54,6 @@ def check_password_simple(password: str) -> bool:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    import io
     import argparse
 
     class CustomParser(argparse.ArgumentParser):
@@ -65,23 +64,14 @@ def main(argv: Sequence[str] | None = None) -> None:
             self.exit(2)
 
         def print_usage(self, file=None):
-            text = io.StringIO()
-            self._print_message(self.format_usage(), text)
-            self.print_text(text)
-
-        def print_text(self, text):
-            text.seek(0)
-            for line in text.readlines():
-                logger.info(line.strip())
+            self._print_message(self.format_usage(), file or sys.stderr)
 
         def warning(self, message):
             if message:
                 logger.warning(f"{self.prog}: warning: {message}")
 
         def print_help(self, file=None):
-            text = io.StringIO()
-            super().print_help(file=text)
-            self.print_text(text)
+            self._print_message(self.format_help(), file or sys.stdout)
 
     class CustomHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
         def __init__(self, *args, **kwargs):
