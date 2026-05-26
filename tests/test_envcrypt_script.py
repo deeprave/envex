@@ -8,14 +8,12 @@ from envex.scripts import envcrypt
 PASSWORD = "Strong#Pass123"
 
 
-def test_main_supports_console_script_help(caplog):
-    caplog.set_level(logging.INFO)
-
+def test_main_supports_console_script_help(capsys):
     with pytest.raises(SystemExit) as exc_info:
         envcrypt.main(["--help"])
 
     assert exc_info.value.code == 0
-    assert "usage:" in caplog.text
+    assert "usage:" in capsys.readouterr().out
 
 
 def test_main_requires_operation(tmp_path, caplog):
