@@ -65,20 +65,25 @@ def test_env_wrapper_dict_none_is_unset():
     assert "ARG2" not in env.env
 
 
-def test_env_wrapper_stream_bytes():
-    stream = io.BytesIO(b"ONE=1\nARG2=two\nENABLED=true\n")
+@pytest.mark.parametrize(
+    ("stream", "expected"),
+    [
+        (
+            io.BytesIO(b"ONE=1\nARG2=two\nENABLED=true\n"),
+            {"ONE": "1", "ARG2": "two", "ENABLED": "true"},
+        ),
+        (
+            io.StringIO("ONE=one\nARG2=2\nENABLED=false\n"),
+            {"ONE": "one", "ARG2": "2", "ENABLED": "false"},
+        ),
+    ],
+    ids=["bytes", "text"],
+)
+def test_env_wrapper_streams(stream, expected):
     env = envex.Env(stream, environ={})
-    assert env("ONE") == "1"
-    assert env("ARG2") == "two"
-    assert env("ENABLED") == "true"
 
-
-def test_env_wrapper_stream_text():
-    stream = io.StringIO("ONE=one\nARG2=2\nENABLED=false\n")
-    env = envex.Env(stream, environ={})
-    assert env("ONE") == "one"
-    assert env("ARG2") == "2"
-    assert env("ENABLED") == "false"
+    for key, value in expected.items():
+        assert env(key) == value
 
 
 def test_env_get():
@@ -303,11 +308,11 @@ def test_env_bool_rejects_invalid_strings(value):
 def test_vault_skip_verify_uses_strict_boolean_parsing(
     skip_verify, expected_verify, monkeypatch
 ):
-    class FakeSecretsManager:
-        calls = []
+    calls = []
 
+    class FakeSecretsManager:
         def __init__(self, **kwargs):
-            self.calls.append(kwargs)
+            calls.append(kwargs)
 
     environ = {}
     if skip_verify is not None:
@@ -316,21 +321,21 @@ def test_vault_skip_verify_uses_strict_boolean_parsing(
     monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
     envex.Env(environ=environ, verify=None)
 
-    assert FakeSecretsManager.calls[-1]["verify"] is expected_verify
+    assert calls[-1]["verify"] is expected_verify
 
 
 @pytest.mark.parametrize("verify", [True, False, "/path/to/ca.pem"])
 def test_explicit_vault_verify_overrides_skip_verify(verify, monkeypatch):
-    class FakeSecretsManager:
-        calls = []
+    calls = []
 
+    class FakeSecretsManager:
         def __init__(self, **kwargs):
-            self.calls.append(kwargs)
+            calls.append(kwargs)
 
     monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
     envex.Env(environ={"VAULT_SKIP_VERIFY": "true"}, verify=verify)
 
-    assert FakeSecretsManager.calls[-1]["verify"] == verify
+    assert calls[-1]["verify"] == verify
 
 
 def test_invalid_vault_skip_verify_raises_value_error(monkeypatch):
@@ -444,20 +449,10 @@ def test_env_iter(monkeypatch):
     monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
     env = envex.Env(readenv=True, update=False)
 
-    # test items() itself (returned by __iter__)
-    for var, val in env.items():
-        assert isinstance(var, str)
-        assert isinstance(val, str)
-
-    # test __iter__ via list()
-    for var, val in list(env):
-        assert isinstance(var, str)
-        assert isinstance(val, str)
-
-    # test __iter__ via dict()
-    for var, val in dict(env).items():
-        assert isinstance(var, str)
-        assert isinstance(val, str)
+    assert list(env) == list(env.items())
+    assert dict(env)["DATABASE_URL"] == (
+        "postgresql://username:password@localhost/database_name"
+    )
 
 
 def test_env_exception():
@@ -501,8 +496,6 @@ def test_env_export():
     env.export({k: None for k in values})
     assert not env.is_any_set(list(values.keys()))
 
-    import os
-
     env.set(values)
     env.export()
     for k, v in values.items():
@@ -543,38 +536,33 @@ def test_check_var(monkeypatch):
     env.read_env()
 
     assert env.check_var("DATABASE_URL") != ""
-    pytest.raises(KeyError, env.check_var, "UNDEFINEDVARIABLE")
+    with pytest.raises(KeyError):
+        env.check_var("UNDEFINEDVARIABLE")
     assert env.check_var(None) == ""
 
 
-def test_setdefault_non_none():
-    env = envex.Env(environ={})
-    # Test when value is not None
-    result = env.setdefault("var1", 123)
-    assert result == "123"
-    assert env.env["var1"] == "123"
-    env.setdefault("var1", 543)
-    assert env.env["var1"] == "123"
+@pytest.mark.parametrize(
+    ("initial", "default", "expected_result", "expected_env"),
+    [
+        ({}, 123, "123", {"var": "123"}),
+        ({}, None, None, {}),
+        ({"var": "value"}, None, "value", {"var": "value"}),
+        ({"var": "abc"}, "def", "abc", {"var": "abc"}),
+    ],
+    ids=[
+        "sets-value",
+        "skips-none",
+        "preserves-existing-with-none",
+        "preserves-existing",
+    ],
+)
+def test_setdefault(initial, default, expected_result, expected_env):
+    env = envex.Env(initial, environ={})
 
+    result = env.setdefault("var", default)
 
-def test_setdefault_none():
-    env = envex.Env(environ={})
-
-    result = env.setdefault("var2", None)
-
-    assert result is None
-    assert "var2" not in env.env
-    env.setdefault("var2", 543)
-    assert env.env["var2"] == "543"
-
-
-def test_setdefault_none_preserves_existing_value():
-    env = envex.Env({"var2": "value"}, environ={})
-
-    result = env.setdefault("var2", None)
-
-    assert result == "value"
-    assert env.env["var2"] == "value"
+    assert result == expected_result
+    assert env.env == expected_env
 
 
 def test_set_none_unsets_existing_value():
@@ -594,19 +582,30 @@ def test_set_dict_none_unsets_existing_value():
     assert env.env["var2"] == "123"
 
 
-def test_setdefault_exists():
-    env = envex.Env(environ={})
-    # Test when variable already exists
-    env.env["var3"] = "abc"
-    result = env.setdefault("var3", "def")
-    assert result == "abc"
-    assert env.env["var3"] == "abc"
+@pytest.mark.parametrize(
+    "selector",
+    [
+        pytest.param("plain", id="plain"),
+        pytest.param("environment", id="environment"),
+        pytest.param("file", id="file"),
+    ],
+)
+def test_encrypted_stream_uses_password_selector(password, tmp_path, selector):
+    environ = {}
+    if selector == "environment":
+        environ = {"TEST_PASSWORD": password}
+        password_arg = "$TEST_PASSWORD"
+    elif selector == "file":
+        password_file = tmp_path / "password.txt"
+        password_file.write_text(f"{password}\n")
+        password_arg = f"@{password_file}"
+    else:
+        password_arg = password
 
-
-def test_encrypted_stream_bytes(password):
     data = b"ONE=1\nARG2=two\nENABLED=true\n"
     stream = encrypt_data(io.BytesIO(data), password)
-    env = envex.Env(stream, password=password)
+    env = envex.Env(stream, decrypt=True, password=password_arg, environ=environ)
+
     assert env("ONE") == "1"
     assert env("ARG2") == "two"
     assert env("ENABLED") == "true"
@@ -621,24 +620,27 @@ def test_encrypted_stream_text(password):
     assert env("ENABLED") == "false"
 
 
-def test_encrypted_stream_bytes_env(password):
-    import os
-
-    os.environ["TEST_PASSWORD"] = password
-    data = b"ONE=1\nARG2=two\nENABLED=true\n"
-    stream = encrypt_data(io.BytesIO(data), password)
-    env = envex.Env(stream, decrypt=True, password="$TEST_PASSWORD")
-    assert env("ONE") == "1"
-    assert env("ARG2") == "two"
-    assert env("ENABLED") == "true"
-
-
-def test_encrypted_env_file_uses_plain_env_password(password, tmp_path):
+@pytest.mark.parametrize(
+    "selector",
+    [
+        pytest.param("plain", id="plain"),
+        pytest.param("environment", id="environment"),
+        pytest.param("file", id="file"),
+    ],
+)
+def test_encrypted_env_file_uses_env_password_selector(password, tmp_path, selector):
     write_encrypted_env(tmp_path, password)
+    environ = {"ENV_PASSWORD": password}
+    if selector == "environment":
+        environ = {"ENV_PASSWORD": "$TEST_PASSWORD", "TEST_PASSWORD": password}
+    elif selector == "file":
+        password_file = tmp_path / "password.txt"
+        password_file.write_text(f"{password}\n")
+        environ = {"ENV_PASSWORD": f"@{password_file}"}
 
     env = envex.Env(
         readenv=True,
-        environ={"ENV_PASSWORD": password},
+        environ=environ,
         env_file=".env",
         search_path=tmp_path,
         update=False,
@@ -649,90 +651,47 @@ def test_encrypted_env_file_uses_plain_env_password(password, tmp_path):
     assert env("ENABLED") == "true"
 
 
-def test_encrypted_env_file_uses_indirect_env_password(password, tmp_path):
-    write_encrypted_env(tmp_path, password)
-
-    env = envex.Env(
-        readenv=True,
-        environ={"ENV_PASSWORD": "$TEST_PASSWORD", "TEST_PASSWORD": password},
-        env_file=".env",
-        search_path=tmp_path,
-        update=False,
-    )
-
-    assert env("ONE") == "1"
-    assert env("ARG2") == "two"
-    assert env("ENABLED") == "true"
-
-
-def test_encrypted_env_file_uses_file_env_password(password, tmp_path):
-    write_encrypted_env(tmp_path, password)
-    password_file = tmp_path / "password.txt"
-    password_file.write_text(f"{password}\n")
-
-    env = envex.Env(
-        readenv=True,
-        environ={"ENV_PASSWORD": f"@{password_file}"},
-        env_file=".env",
-        search_path=tmp_path,
-        update=False,
-    )
-
-    assert env("ONE") == "1"
-    assert env("ARG2") == "two"
-    assert env("ENABLED") == "true"
-
-
-def test_plain_env_file_fallback_with_env_password_is_not_corrupted(password, tmp_path):
-    env_file = tmp_path / ".env"
-    env_file.write_text("ONE=1\nARG2=two\nENABLED=true\n")
-
-    env = envex.Env(
-        readenv=True,
-        environ={"ENV_PASSWORD": password},
-        env_file=".env",
-        search_path=tmp_path,
-        update=False,
-    )
-
-    assert env("ONE") == "1"
-    assert env("ARG2") == "two"
-    assert env("ENABLED") == "true"
-
-
-def test_plain_stream_with_env_password_is_not_corrupted(password):
-    stream = io.BytesIO(b"ONE=1\nARG2=two\nENABLED=true\n")
-
-    env = envex.Env(stream, environ={"ENV_PASSWORD": password})
-
-    assert env("ONE") == "1"
-    assert env("ARG2") == "two"
-    assert env("ENABLED") == "true"
-
-
-@pytest.mark.parametrize("key", ["SECG_KEY", "SECF_KEY"])
-def test_plain_stream_magic_prefix_key_with_env_password_is_not_rejected(password, key):
-    stream = io.BytesIO(f"{key}=value\n".encode())
-
-    env = envex.Env(stream, environ={"ENV_PASSWORD": password})
-
-    assert env[key] == "value"
-
-
-@pytest.mark.parametrize("key", ["SECG_KEY", "SECF_KEY"])
-def test_plain_env_file_magic_prefix_key_with_env_password_is_not_rejected(
-    password, tmp_path, key
+@pytest.mark.parametrize("source", ["env-file", "stream"])
+def test_plaintext_fallback_with_env_password_is_not_corrupted(
+    password, tmp_path, source
 ):
-    env_file = tmp_path / ".env"
-    env_file.write_text(f"{key}=value\n")
+    data = "ONE=1\nARG2=two\nENABLED=true\n"
+    if source == "env-file":
+        env_file = tmp_path / ".env"
+        env_file.write_text(data)
+        env = envex.Env(
+            readenv=True,
+            environ={"ENV_PASSWORD": password},
+            env_file=".env",
+            search_path=tmp_path,
+            update=False,
+        )
+    else:
+        env = envex.Env(io.BytesIO(data.encode()), environ={"ENV_PASSWORD": password})
 
-    env = envex.Env(
-        readenv=True,
-        environ={"ENV_PASSWORD": password},
-        env_file=".env",
-        search_path=tmp_path,
-        update=False,
-    )
+    assert env("ONE") == "1"
+    assert env("ARG2") == "two"
+    assert env("ENABLED") == "true"
+
+
+@pytest.mark.parametrize("key", ["SECG_KEY", "SECF_KEY"])
+@pytest.mark.parametrize("source", ["env-file", "stream"])
+def test_plaintext_magic_prefix_key_with_env_password_is_not_rejected(
+    password, tmp_path, key, source
+):
+    data = f"{key}=value\n"
+    if source == "env-file":
+        env_file = tmp_path / ".env"
+        env_file.write_text(data)
+        env = envex.Env(
+            readenv=True,
+            environ={"ENV_PASSWORD": password},
+            env_file=".env",
+            search_path=tmp_path,
+            update=False,
+        )
+    else:
+        env = envex.Env(io.BytesIO(data.encode()), environ={"ENV_PASSWORD": password})
 
     assert env[key] == "value"
 
@@ -764,28 +723,6 @@ def test_decrypt_false_ignores_env_password(password, tmp_path):
     )
 
     assert env.get("ONE") is None
-
-
-def test_explicit_password_file_selector(password, tmp_path):
-    data = b"ONE=1\nARG2=two\nENABLED=true\n"
-    stream = encrypt_data(io.BytesIO(data), password)
-    password_file = tmp_path / "password.txt"
-    password_file.write_text(f"{password}\n")
-
-    env = envex.Env(stream, decrypt=True, password=f"@{password_file}", environ={})
-
-    assert env("ONE") == "1"
-    assert env("ARG2") == "two"
-    assert env("ENABLED") == "true"
-
-
-def test_encrypted_stream_bytes2(password):
-    data = b"ONE=1\nARG2=two\nENABLED=true\n"
-    stream = encrypt_data(io.BytesIO(data), password)
-    env = envex.Env(stream, decrypt=True, password=password)
-    assert env("ONE") == "1"
-    assert env("ARG2") == "two"
-    assert env("ENABLED") == "true"
 
 
 def test_encrypted_stream_invalid_plaintext_fallback_decode_error(password):

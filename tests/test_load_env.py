@@ -52,38 +52,51 @@ def test_load_env(monkeypatch, envmap):
     assert env["COMBINED"] == "first-value:third-value:fifth-value"
 
 
-def test_export_command_respects_isolated_environ(monkeypatch, envmap):
+@pytest.mark.parametrize(
+    ("update", "expected_os_value"),
+    [
+        (False, None),
+        (True, "fifth-value"),
+    ],
+)
+def test_export_command_updates_requested_environ(
+    update, expected_os_value, monkeypatch, envmap
+):
     monkeypatch.delenv("FIFTH", raising=False)
     monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
 
-    env = envex.load_env(search_path=__file__, environ=envmap, update=False)
+    env = envex.load_env(search_path=__file__, environ=envmap, update=update)
 
     assert env["FIFTH"] == "fifth-value"
-    assert "FIFTH" not in envex.dot_env.os.environ
+    assert envex.dot_env.os.environ.get("FIFTH") == expected_os_value
 
 
-def test_export_command_updates_os_environ_only_when_requested(monkeypatch, envmap):
-    monkeypatch.delenv("FIFTH", raising=False)
-    monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
-
-    env = envex.load_env(search_path=__file__, environ=envmap, update=True)
-
-    assert env["FIFTH"] == "fifth-value"
-    assert envex.dot_env.os.environ["FIFTH"] == "fifth-value"
-
-
-def test_empty_values_are_preserved(tmp_path):
+@pytest.mark.parametrize(
+    "line",
+    [
+        pytest.param("EMPTY=\n", id="default"),
+        pytest.param("export EMPTY=\n", id="export"),
+    ],
+)
+def test_empty_values_are_preserved(tmp_path, line):
     env_file = tmp_path / ".env"
-    env_file.write_text("EMPTY=\n")
+    env_file.write_text(line)
 
     env = envex.load_env(search_path=tmp_path, environ={}, update=False)
 
     assert env["EMPTY"] == ""
 
 
-def test_empty_values_follow_overwrite_semantics(tmp_path):
+@pytest.mark.parametrize(
+    "line",
+    [
+        pytest.param("EMPTY=\n", id="default"),
+        pytest.param("export EMPTY=\n", id="export"),
+    ],
+)
+def test_empty_values_follow_overwrite_semantics(tmp_path, line):
     env_file = tmp_path / ".env"
-    env_file.write_text("EMPTY=\n")
+    env_file.write_text(line)
 
     preserved = envex.load_env(
         search_path=tmp_path,
@@ -111,27 +124,6 @@ def test_export_empty_value_respects_isolated_environ(tmp_path, monkeypatch):
 
     assert env["EMPTY"] == ""
     assert "EMPTY" not in envex.dot_env.os.environ
-
-
-def test_export_empty_values_follow_overwrite_semantics(tmp_path):
-    env_file = tmp_path / ".env"
-    env_file.write_text("export EMPTY=\n")
-
-    preserved = envex.load_env(
-        search_path=tmp_path,
-        environ={"EMPTY": "existing"},
-        update=False,
-        overwrite=False,
-    )
-    overwritten = envex.load_env(
-        search_path=tmp_path,
-        environ={"EMPTY": "existing"},
-        update=False,
-        overwrite=True,
-    )
-
-    assert preserved["EMPTY"] == "existing"
-    assert overwritten["EMPTY"] == ""
 
 
 def test_missing_env_file_does_not_yield_phantom_path(tmp_path):
@@ -281,7 +273,7 @@ def test_load_env_accepts_iterable_search_path(tmp_path):
 
 
 def test_filesystem_path_decode_uses_surrogateescape():
-    assert envex.dot_env._decode_filesystem_path(b"\xff")
+    assert envex.dot_env._decode_filesystem_path(b"\xff") == "\udcff"
 
 
 def test_quoted_value(monkeypatch, envmap):
@@ -291,16 +283,28 @@ def test_quoted_value(monkeypatch, envmap):
     assert env["SINGLE_QUOTED"] == "a quoted value"
 
 
-def test_load_env_default_search_path_uses_external_caller(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("loader_expression", "expected_value"),
+    [
+        (
+            "envex.load_env(environ={}, update=False, working_dirs=False)",
+            "direct",
+        ),
+        (
+            "envex.Env(readenv=True, environ={}, update=False, working_dirs=False)",
+            "wrapper",
+        ),
+    ],
+)
+def test_default_search_path_uses_external_caller(
+    tmp_path, monkeypatch, loader_expression, expected_value
+):
     caller_dir = tmp_path / "caller"
     caller_dir.mkdir()
-    (caller_dir / ".env").write_text("FROM_CALLER=direct\n")
+    (caller_dir / ".env").write_text(f"FROM_CALLER={expected_value}\n")
     module_path = caller_dir / "caller_module.py"
     module_path.write_text(
-        "import envex\n"
-        "\n"
-        "def load():\n"
-        "    return envex.load_env(environ={}, update=False, working_dirs=False)\n"
+        f"import envex\n\ndef load():\n    return {loader_expression}\n"
     )
     cwd = tmp_path / "cwd"
     cwd.mkdir()
@@ -309,25 +313,4 @@ def test_load_env_default_search_path_uses_external_caller(tmp_path, monkeypatch
     module = load_module(module_path)
     env = module.load()
 
-    assert env["FROM_CALLER"] == "direct"
-
-
-def test_env_readenv_default_search_path_skips_envex_wrappers(tmp_path, monkeypatch):
-    caller_dir = tmp_path / "caller"
-    caller_dir.mkdir()
-    (caller_dir / ".env").write_text("FROM_CALLER=wrapper\n")
-    module_path = caller_dir / "caller_module.py"
-    module_path.write_text(
-        "import envex\n"
-        "\n"
-        "def load():\n"
-        "    return envex.Env(readenv=True, environ={}, update=False, working_dirs=False)\n"
-    )
-    cwd = tmp_path / "cwd"
-    cwd.mkdir()
-    monkeypatch.chdir(cwd)
-
-    module = load_module(module_path)
-    env = module.load()
-
-    assert env["FROM_CALLER"] == "wrapper"
+    assert env["FROM_CALLER"] == expected_value
