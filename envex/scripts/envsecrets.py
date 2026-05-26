@@ -18,14 +18,15 @@ from functools import cache
 from pathlib import Path
 from string import Template
 
-from envex.dot_env import _current_working_dir, load_env
+from envex.dot_env import load_env
 from envex.env_hvac import SecretsManager
+from envex.paths import current_working_dir
 
 SECRET_MARK = "|"
 
 
 def _default_search_path(envfile: str | Path | None) -> list[str | Path]:
-    cwd = _current_working_dir()
+    cwd = current_working_dir()
     if cwd is not None:
         return [cwd]
     if envfile is not None and Path(envfile).is_absolute():

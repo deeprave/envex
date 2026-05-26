@@ -88,14 +88,14 @@ def test_read_env_uses_absolute_dotenv_when_current_working_dir_is_missing(
 ):
     dotenv = tmp_path / ".env"
     dotenv.write_text("PUBLIC=hello\n")
-    monkeypatch.setattr(envsecrets, "_current_working_dir", lambda: None)
+    monkeypatch.setattr(envsecrets, "current_working_dir", lambda: None)
 
     assert envsecrets.read_env(dotenv) == {"PUBLIC": "hello"}
     assert capsys.readouterr().err == ""
 
 
 def test_read_env_warns_when_default_search_path_is_unavailable(monkeypatch, capsys):
-    monkeypatch.setattr(envsecrets, "_current_working_dir", lambda: None)
+    monkeypatch.setattr(envsecrets, "current_working_dir", lambda: None)
 
     assert envsecrets.read_env(None) == {}
     assert (

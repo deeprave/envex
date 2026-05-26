@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .env_crypto import AUTH_MAGIC_BYTES, MAGIC_BYTES, decrypt_data, DecryptError
+from .paths import current_working_dir
 
 __all__ = (
     "load_env",
@@ -343,13 +344,6 @@ def _decode_filesystem_path(path: bytes) -> str:
     return path.decode(fs_encoding, errors="surrogateescape")
 
 
-def _current_working_dir() -> str | None:
-    try:
-        return Path.cwd().resolve(strict=True).as_posix()
-    except FileNotFoundError:
-        return None
-
-
 def load_env(
     env_file: str | Path | None = None,
     search_path: str | bytes | Path | Iterable[str | bytes | Path] | None = None,
@@ -386,7 +380,7 @@ def load_env(
 
     # insert this as a useful default
     if working_dirs:
-        cwd = _current_working_dir()
+        cwd = current_working_dir()
         if cwd is not None:
             environ["CWD"] = cwd
 
