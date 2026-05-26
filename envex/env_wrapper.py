@@ -28,6 +28,7 @@ class Env:
     _EXCEPTION_CLS = KeyError
     _LOAD_ENV_KWARGS = frozenset(inspect.signature(load_env).parameters)
     _SOURCE_KEY = "ENVEX_SOURCE"
+    _SOURCE_VALUES = frozenset(("env", "vault"))
 
     def __init__(
         self,
@@ -174,7 +175,10 @@ class Env:
         return os.environ
 
     def _resolve_env_source(self) -> str:
-        return self.env.get(self._SOURCE_KEY, "env")
+        source = str(self.env.get(self._SOURCE_KEY, "env")).strip().lower()
+        if source not in self._SOURCE_VALUES:
+            raise ValueError(f"Invalid {self._SOURCE_KEY} value: {source!r}")
+        return source
 
     def read_env(self, **kwargs):
         """
