@@ -4,7 +4,7 @@ import os
 import sys
 import contextlib
 import re
-from collections.abc import Generator, MutableMapping, Sequence
+from collections.abc import Generator, Iterable, MutableMapping
 from io import TextIOBase, BytesIO, BufferedReader
 from pathlib import Path
 from typing import Any
@@ -341,7 +341,7 @@ def _decode_filesystem_path(path: bytes) -> str:
 
 def load_env(
     env_file: str | Path | None = None,
-    search_path: str | bytes | Path | Sequence[str | bytes | Path] | None = None,
+    search_path: str | bytes | Path | Iterable[str | bytes | Path] | None = None,
     environ: MutableMapping[str, str] | None = None,
     overwrite: bool = False,
     parents: bool = False,
