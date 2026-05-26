@@ -4,7 +4,7 @@ import os
 import sys
 import contextlib
 import re
-from collections.abc import Generator, Iterable, MutableMapping
+from collections.abc import Collection, Generator, Iterable, MutableMapping
 from io import TextIOBase, BytesIO, BufferedReader
 from pathlib import Path
 from typing import Any
@@ -46,18 +46,51 @@ def update_env(env: MutableMapping[str, str], mapping: dict):
         env[str(k)] = str(v)
 
 
-def _env_default(
-    environ: MutableMapping[str, str], key: str, val: str, overwrite: bool = False
-):
-    if key and val is not None and (overwrite or key not in environ):
-        environ[key] = val
+def _copy_env_mapping(environ: MutableMapping[str, str]) -> MutableMapping[str, str]:
+    copy = getattr(environ, "copy", None)
+    if callable(copy):
+        copied = copy()
+        if isinstance(copied, MutableMapping):
+            return copied
+    return dict(environ)
 
 
-def _env_export(
-    environ: MutableMapping[str, str], key: str, val: str, overwrite: bool = False
-):
+def _set_env_value_if_needed(
+    environ: MutableMapping[str, str],
+    key: str,
+    val: str | None,
+    overwrite: bool = False,
+) -> bool:
+    """
+    Set an environment value if needed.
+
+    If val is None, environ is left unchanged.
+    Returns True only when `environ` was mutated.
+    """
     if key and val is not None and (overwrite or key not in environ):
         environ[key] = val
+        return True
+    return False
+
+
+def _set_env_default_if_needed(
+    environ: MutableMapping[str, str],
+    key: str,
+    val: str | None,
+    overwrite: bool = False,
+) -> bool:
+    """Apply the default dotenv assignment command."""
+    return _set_env_value_if_needed(environ, key, val, overwrite)
+
+
+def _set_env_export_if_needed(
+    environ: MutableMapping[str, str],
+    key: str,
+    val: str | None,
+    overwrite: bool = False,
+) -> bool:
+    """Apply the export dotenv assignment command."""
+    return _set_env_value_if_needed(environ, key, val, overwrite)
 
 
 def _env_files(
@@ -134,13 +167,18 @@ def open_env(path: str | Path) -> Generator[BufferedReader, Any, None]:
 
 
 ENV_COMMANDS = {
-    "export": _env_export,
+    "export": _set_env_export_if_needed,
 }
 
 
 def _process_line(_lineno: int, string: str, errors: bool, _env_path: Path | None):
-    """process a single line"""
-    _func, _key, _val = _env_default, None, None
+    """
+    Process a single dotenv line.
+
+    Returns a setter plus parsed key and value. Non-assignment lines can return
+    None for the value, and callers must skip them before invoking the setter.
+    """
+    _func, _key, _val = _set_env_default_if_needed, None, None
     parts = string.split("=", 1)
     if len(parts) == 2:
         _key, _val = parts
@@ -162,14 +200,27 @@ def _process_line(_lineno: int, string: str, errors: bool, _env_path: Path | Non
 
 
 def _process_stream(
-    stream: BytesIO, environ, overwrite, errors, encoding=DEFAULT_ENCODING, env_path=None
+    stream: BytesIO,
+    environ,
+    overwrite,
+    errors,
+    encoding=DEFAULT_ENCODING,
+    env_path=None,
 ):
+    """
+    Process dotenv lines and return keys whose values were mutated.
+    """
+    dotenv_mutated_keys: set[str] = set()
     for lineno, line in enumerate(stream.readlines(), start=1):
         line = line.decode(encoding).strip()
         if line and line[0] != "#":
             func, key, val = _process_line(lineno, line, errors, env_path)
-            if func is not None:
-                func(environ, key, val, overwrite=overwrite)
+            if func is not None and key is not None:
+                # Setter helpers no-op for None values and return True only
+                # when environ actually changed.
+                if func(environ, key, val, overwrite=overwrite):
+                    dotenv_mutated_keys.add(key)
+    return dotenv_mutated_keys
 
 
 def _process_env(
@@ -183,7 +234,7 @@ def _process_env(
     decrypt: bool,
     password: str | None = None,
     encoding: str = DEFAULT_ENCODING,
-) -> MutableMapping[str, str]:
+) -> tuple[MutableMapping[str, str], set[str]]:
     """
     search for any env_files in the given dir list and populate environ dict
 
@@ -199,6 +250,7 @@ def _process_env(
     """
     files_not_found = []
     files_found = False
+    dotenv_mutated_keys: set[str] = set()
     for env_path in _env_files(env_file, search_path, parents, decrypt, errors):
         env_path = Path(env_path).resolve()
         try:
@@ -209,7 +261,7 @@ def _process_env(
                 data = f.read()
                 if isinstance(data, str):
                     data = data.encode(encoding)
-                load_stream(
+                stream_mutated_keys = _load_stream(
                     BytesIO(data),
                     environ,
                     overwrite,
@@ -219,6 +271,7 @@ def _process_env(
                     encoding,
                     env_path,
                 )
+                dotenv_mutated_keys.update(stream_mutated_keys)
             files_found = True
         except FileNotFoundError:
             files_not_found.append(env_path)
@@ -226,7 +279,7 @@ def _process_env(
         raise FileNotFoundError(
             f"{env_file} as {[s.as_posix() for s in files_not_found]}"
         )
-    return environ
+    return environ, dotenv_mutated_keys
 
 
 def _process_var_reference(
@@ -313,15 +366,25 @@ def substitute_env_vars(
     return _process_nested_vars(value, environ, preserve_missing)
 
 
-def _post_process(environ: MutableMapping[str, str]) -> MutableMapping[str, str]:
+def _post_process(
+    environ: MutableMapping[str, str], keys: Collection[str] | None = None
+) -> MutableMapping[str, str]:
     """
     Post-process the variables using shell-like variable substitution:
     - ${VAR} - Standard variable substitution
     - ${VAR:-default} - Use default if VAR is not set
     - ${VAR:+value} - Use value only if VAR is set
     - $VAR - Variable substitution without braces
+
+    If keys are provided, they must be a collection of strings. They are used
+    only as a membership filter for values to update; processing still follows a
+    snapshot of environ's insertion order. Filtered values may still resolve
+    references against any key in environ, including unfiltered inherited keys.
     """
-    for key, val in list(environ.items()):
+    items = list(environ.items())
+    if keys is not None:
+        items = [(key, val) for key, val in items if key in keys]
+    for key, val in items:
         if "$" in val:  # Potential variable reference!
             new_val = _process_nested_vars(val, environ)
             if new_val != val:
@@ -402,6 +465,7 @@ def load_env(
     if not env_file:
         env_file = environ.get(DEFAULT_ENVKEY, DEFAULT_DOTENV)
     env_file = str(env_file)
+    environ = _copy_env_mapping(environ)
 
     # insert this as a useful default
     if working_dirs:
@@ -429,21 +493,23 @@ def load_env(
     if overwrite:
         resolved_search_path.reverse()
 
-    # slurp up the environment files found and
-    # post-process values for template variables
+    # Track only keys changed by dotenv input so substitution cannot rewrite
+    # unrelated inherited environment values.
+    environ, dotenv_mutated_keys = _process_env(
+        env_file,
+        resolved_search_path,
+        environ,
+        overwrite,
+        parents,
+        errors,
+        working_dirs,
+        decrypt,
+        password,
+        encoding,
+    )
     environ = _post_process(
-        _process_env(
-            env_file,
-            resolved_search_path,
-            dict(environ),
-            overwrite,
-            parents,
-            errors,
-            working_dirs,
-            decrypt,
-            password,
-            encoding,
-        )
+        environ,
+        dotenv_mutated_keys,
     )
     # optionally update the actual environment
     return _update_os_env(environ) if update else environ
@@ -459,6 +525,28 @@ def load_stream(
     encoding: str = DEFAULT_ENCODING,
     env_path: Path | None = None,
 ):
+    _load_stream(
+        stream,
+        environ,
+        overwrite,
+        errors,
+        decrypt,
+        password,
+        encoding,
+        env_path,
+    )
+
+
+def _load_stream(
+    stream: BytesIO | TextIOBase,
+    environ: MutableMapping[str, str] | None = None,
+    overwrite: bool = False,
+    errors: bool = False,
+    decrypt: bool = False,
+    password: str | None = None,
+    encoding: str = DEFAULT_ENCODING,
+    env_path: Path | None = None,
+) -> set[str]:
     if environ is None:
         environ = os.environ
     if isinstance(stream, TextIOBase):
@@ -478,7 +566,7 @@ def load_stream(
                 or not _looks_like_plaintext_dotenv(stream, encoding)
             ):
                 raise
-    _process_stream(stream, environ, overwrite, errors, encoding, env_path)
+    return _process_stream(stream, environ, overwrite, errors, encoding, env_path)
 
 
 def _is_encrypted_env_path(env_path: Path | None) -> bool:
