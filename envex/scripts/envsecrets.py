@@ -17,7 +17,6 @@ from collections.abc import Sequence
 from functools import cache
 from pathlib import Path
 from string import Template
-from typing import Union
 
 from envex.dot_env import load_env
 from envex.env_hvac import SecretsManager
@@ -27,7 +26,7 @@ SECRET_MARK = "|"
 
 # noinspection DuplicatedCode
 def read_env(
-    envfile: Union[str, Path, None],
+    envfile: str | Path | None,
     search=None,
     parents=False,
     useenv=False,

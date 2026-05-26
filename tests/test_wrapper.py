@@ -422,33 +422,22 @@ def test_env_list(monkeypatch):
     monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
     env = envex.Env(readenv=True)
 
-    result = _extracted_from_test_env_list_5(env, "ALISTOFIPS", 3)
-    assert result == ["::1", "127.0.0.1", "mydomain.com"]
+    assert_env_list_value(env, "ALISTOFIPS", ["::1", "127.0.0.1", "mydomain.com"])
+    assert_env_list_value(
+        env, "ALISTOFIPS", ["::1", "127.0.0.1", "mydomain.com"], via_call=True
+    )
 
-    result = _extracted_from_test_env_list_10(env, "ALISTOFIPS", 3)
-    assert result == ["::1", "127.0.0.1", "mydomain.com"]
-
-    result = _extracted_from_test_env_list_5(env, "LISTOFQUOTEDVALUES", 4)
-    assert result == ["1", "two", "3", "four"]
-
-    result = _extracted_from_test_env_list_10(env, "LISTOFQUOTEDVALUES", 4)
-    assert result == ["1", "two", "3", "four"]
-
-
-def _extracted_from_test_env_list_5(env, arg1, arg2):
-    result = env.list(arg1)
-    return _extracted_from__extracted_from_test_env_list_10_11(result, arg2)
+    expected_quoted_values = ["1", "two", "3", "four"]
+    assert_env_list_value(env, "LISTOFQUOTEDVALUES", expected_quoted_values)
+    assert_env_list_value(
+        env, "LISTOFQUOTEDVALUES", expected_quoted_values, via_call=True
+    )
 
 
-def _extracted_from__extracted_from_test_env_list_10_11(result, arg2):
+def assert_env_list_value(env, key, expected, *, via_call=False):
+    result = env(key, type=list) if via_call else env.list(key)
     assert isinstance(result, list)
-    assert len(result) == arg2
-    return result
-
-
-def _extracted_from_test_env_list_10(env, arg1, arg2):
-    result = env(arg1, type=list)
-    return _extracted_from__extracted_from_test_env_list_10_11(result, arg2)
+    assert result == expected
 
 
 def test_env_iter(monkeypatch):
