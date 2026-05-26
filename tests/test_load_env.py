@@ -140,6 +140,84 @@ def test_missing_env_file_does_not_yield_phantom_path(tmp_path):
     assert "PWD" not in env
 
 
+def test_load_env_uses_mapping_copy_when_available(tmp_path):
+    class CopyAwareEnv(dict):
+        copied = False
+
+        def copy(self):
+            copied = type(self)(self)
+            copied.copied = True
+            return copied
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("VALUE=$BASE\n")
+    original = CopyAwareEnv({"BASE": "base"})
+
+    env = envex.load_env(search_path=tmp_path, environ=original, update=False)
+
+    assert isinstance(env, CopyAwareEnv)
+    assert env.copied
+    assert env["VALUE"] == "base"
+    assert "CWD" not in original
+    assert "PWD" not in original
+
+
+def test_missing_env_file_does_not_substitute_existing_values(tmp_path):
+    env = envex.load_env(
+        env_file=".missing",
+        search_path=tmp_path,
+        environ={"SECRET": "pa$word"},
+        update=False,
+        working_dirs=False,
+    )
+
+    assert env["SECRET"] == "pa$word"
+
+
+def test_missing_env_file_does_not_rewrite_existing_process_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("SECRET", "pa$word")
+
+    env = envex.load_env(
+        env_file=".missing",
+        search_path=tmp_path,
+        update=True,
+        working_dirs=False,
+    )
+
+    assert env["SECRET"] == "pa$word"
+    assert envex.dot_env.os.environ["SECRET"] == "pa$word"
+
+
+def test_loaded_values_still_substitute_from_existing_values(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("URL=https://$HOST/callback\n")
+
+    env = envex.load_env(
+        search_path=tmp_path,
+        environ={"HOST": "example.test", "SECRET": "pa$word"},
+        update=False,
+        working_dirs=False,
+    )
+
+    assert env["URL"] == "https://example.test/callback"
+    assert env["SECRET"] == "pa$word"
+
+
+def test_skipped_dotenv_values_are_not_post_processed(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("SECRET=$MISSING\n")
+
+    env = envex.load_env(
+        search_path=tmp_path,
+        environ={"SECRET": "pa$word"},
+        overwrite=False,
+        update=False,
+        working_dirs=False,
+    )
+
+    assert env["SECRET"] == "pa$word"
+
+
 def test_missing_current_working_dir_omits_cwd(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
     env_file.write_text("VALUE=ok\n")
