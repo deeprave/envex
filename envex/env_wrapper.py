@@ -9,7 +9,7 @@ import os
 import re
 from pathlib import Path
 from io import TextIOBase, BytesIO
-from collections.abc import MutableMapping
+from collections.abc import MutableMapping, Sequence
 from typing import Any
 
 from envex.env_hvac import SecretsManager
@@ -254,17 +254,21 @@ class Env:
 
     def is_all_set(self, *_vars):
         for v in _vars:
-            if isinstance(v, (list, tuple)):
-                return self.is_all_set(*v)
-            if not self.is_set(v):
+            # Expand list/tuple-like containers without consuming generators
+            # or treating unordered mappings/sets as positional arguments.
+            if isinstance(v, Sequence) and not isinstance(v, (str, bytes)):
+                if not self.is_all_set(*v):
+                    return False
+            elif not self.is_set(v):
                 return False
         return True
 
     def is_any_set(self, *_vars):
         for v in _vars:
-            if isinstance(v, (list, tuple)):
-                return self.is_any_set(*v)
-            if self.is_set(v):
+            if isinstance(v, Sequence) and not isinstance(v, (str, bytes)):
+                if self.is_any_set(*v):
+                    return True
+            elif self.is_set(v):
                 return True
         return False
 

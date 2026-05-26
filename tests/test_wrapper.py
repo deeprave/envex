@@ -502,6 +502,39 @@ def test_env_export():
         assert os.environ[k] == str(v)
 
 
+def test_is_all_set_checks_remaining_args_after_nested_collection():
+    env = envex.Env({"A": "1"}, environ={})
+
+    assert not env.is_all_set(["A"], "B")
+
+    env.set("B", "2")
+
+    assert env.is_all_set(["A"], "B")
+
+
+def test_is_any_set_checks_remaining_args_after_nested_collection():
+    env = envex.Env({"A": "1"}, environ={})
+
+    assert env.is_any_set(["missing"], "A")
+    assert not env.is_any_set(["missing"], "also_missing")
+
+
+def test_is_set_helpers_recurse_into_sequence_collections():
+    env = envex.Env({"A": "1", "B": "2"}, environ={})
+
+    assert env.is_all_set(("A", "B"))
+    assert not env.is_all_set(("A", "missing"))
+    assert env.is_any_set(("missing", "A"))
+    assert not env.is_any_set(("missing", "also_missing"))
+
+
+def test_is_set_helpers_do_not_consume_generators_as_nested_vars():
+    env = envex.Env({"A": "1", "B": "2"}, environ={})
+
+    assert not env.is_all_set(key for key in ["A", "B"])
+    assert not env.is_any_set(key for key in ["missing", "B"])
+
+
 def test_env_export_none_removes_process_env_without_keyerror(monkeypatch):
     monkeypatch.setenv("REMOVE_ME", "value")
     env = envex.Env({"REMOVE_ME": "value"}, environ={})

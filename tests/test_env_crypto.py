@@ -2,7 +2,7 @@
 
 import builtins
 import importlib.util
-from io import BytesIO, StringIO
+from io import BytesIO, StringIO, UnsupportedOperation
 from pathlib import Path
 
 import pytest
@@ -34,6 +34,22 @@ def test_encrypt_decrypt_unicode_(password):
     assert result.getvalue().decode("utf-8") == test_string
 
 
+def test_encrypt_data_accepts_non_seekable_text_stream(password):
+    class NonSeekableTextStream:
+        def __init__(self, value):
+            self._stream = StringIO(value)
+
+        def seek(self, *_args):
+            raise UnsupportedOperation("not seekable")
+
+        def read(self):
+            return self._stream.read()
+
+    encrypted = encrypt_data(NonSeekableTextStream("VALUE=ok\n"), password)
+
+    assert decrypt_data(encrypted, password).getvalue() == b"VALUE=ok\n"
+
+
 def test_encrypt_data_no_password():
     input_data = BytesIO(b"test data")
     password = ""
@@ -46,6 +62,60 @@ def test_encrypt_data_already_encrypted(password):
     input_enc = encrypt_data(input_data, password)
     with pytest.raises(EncryptError):
         encrypt_data(input_enc, password)
+
+
+def test_encrypt_data_rejects_assignment_looking_authenticated_output(
+    password, monkeypatch
+):
+    def token_bytes(size):
+        if size == env_crypto.SALT_LENGTH:
+            return b"=\n" + b"s" * (size - 2)
+        if size == env_crypto.GCM_NONCE_LENGTH:
+            return b"n" * size
+        return b"x" * size
+
+    monkeypatch.setattr(env_crypto.secrets, "token_bytes", token_bytes)
+    encrypted = encrypt_data(BytesIO(b"Some Test data data"), password)
+
+    assert encrypted.getvalue().startswith(b"SECG=\n")
+    with pytest.raises(EncryptError):
+        encrypt_data(encrypted, password)
+
+
+def test_encrypt_data_rejects_assignment_looking_output_with_wrong_password(
+    password, monkeypatch
+):
+    def token_bytes(size):
+        if size == env_crypto.SALT_LENGTH:
+            return b"_KEY=value\n" + b"s" * (size - 11)
+        if size == env_crypto.GCM_NONCE_LENGTH:
+            return b"n" * size
+        return b"x" * size
+
+    monkeypatch.setattr(env_crypto.secrets, "token_bytes", token_bytes)
+    encrypted = encrypt_data(BytesIO(b"Some Test data data"), password)
+
+    assert encrypted.getvalue().startswith(b"SECG_KEY=value\n")
+    with pytest.raises(EncryptError):
+        encrypt_data(encrypted, "wrong-password")
+
+
+@pytest.mark.parametrize(
+    "line_prefix,key",
+    [
+        ("", "SECG_KEY"),
+        ("", "SECF_KEY"),
+        ("  ", "SECG_KEY"),
+    ],
+)
+def test_encrypt_data_accepts_plaintext_dotenv_magic_prefix_keys(
+    password, line_prefix, key
+):
+    # This length makes both magic prefixes structurally plausible containers.
+    input_data = f"{line_prefix}{key}={'x' * 42}\n".encode()
+    encrypted = encrypt_data(BytesIO(input_data), password)
+
+    assert decrypt_data(encrypted, password).getvalue() == input_data
 
 
 def test_encrypt_data_value_error_raises_encrypt_error(password, monkeypatch):
@@ -148,6 +218,13 @@ def legacy_encrypt_data(data: bytes, password: str) -> BytesIO:
     return BytesIO(
         env_crypto.MAGIC_BYTES + salt + iv + cipher.encrypt(env_crypto._pad(data))
     )
+
+
+def test_encrypt_data_rejects_legacy_encrypted_input(password):
+    encrypted_data = legacy_encrypt_data(b"LEGACY_ENCRYPTED_DATA", password)
+
+    with pytest.raises(EncryptError):
+        encrypt_data(encrypted_data, password)
 
 
 def test_legacy_cbc_decryption_remains_supported(password):
