@@ -21,15 +21,16 @@ def test_decrement_rejects_non_numeric_state(capsys):
 
 
 def test_log_set_level_updates_current_level():
-    previous_level = logging.getLogger().level
+    previous_level = script_log.log_get_level(logging.getLogger().level)
     try:
         assert script_log.log_get_level(script_log.log_set_level(4)) == 4
         assert script_log.log_get_level() == 4
         assert script_log.log_get_level(script_log.log_set_level(-1)) == 0
         assert script_log.log_get_level() == 0
+        assert script_log.log_get_level(script_log.log_set_level(999)) == 4
+        assert script_log.log_get_level() == 4
     finally:
-        script_log.log_set_level()
-        logging.getLogger().setLevel(previous_level)
+        script_log.log_set_level(previous_level)
 
 
 def test_seal_exits_nonzero_on_operational_error(monkeypatch, caplog):
