@@ -21,6 +21,7 @@ class Decrement(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         current_value = getattr(namespace, self.dest, self.default or 0)
         try:
-            setattr(namespace, self.dest, current_value - 1)
-        except TypeError:
-            pass
+            next_value = int(current_value) - 1
+        except (TypeError, ValueError) as exc:
+            raise argparse.ArgumentError(self, f"{self.dest} must be an integer") from exc
+        setattr(namespace, self.dest, next_value)
