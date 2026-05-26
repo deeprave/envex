@@ -26,13 +26,18 @@ _SUBSTITUTION_PATTERN = re.compile(r"\$\{|\$[a-zA-Z_][a-zA-Z0-9_]*")
 
 
 @dataclass(frozen=True)
-class RenderedTemplateValue:
+class PublicTemplateValue:
     var: str
     val: str
-    secret: bool
 
 
-RenderedTemplateLine = str | RenderedTemplateValue
+@dataclass(frozen=True)
+class SecretTemplateValue:
+    var: str
+    val: str
+
+
+RenderedTemplateLine = str | PublicTemplateValue | SecretTemplateValue
 
 
 class SecretsManagerError(RuntimeError):
@@ -92,10 +97,14 @@ def subst(
         return value
 
     for line in lines:
-        if isinstance(line, RenderedTemplateValue):
+        if isinstance(line, PublicTemplateValue):
             val = do_subst(line.val)
             environ[line.var] = val  # update the environment
-            data.append(RenderedTemplateValue(line.var, val, line.secret))
+            data.append(PublicTemplateValue(line.var, val))
+        elif isinstance(line, SecretTemplateValue):
+            val = do_subst(line.val)
+            environ[line.var] = val  # update the environment
+            data.append(SecretTemplateValue(line.var, val))
         else:
             data.append(line)
 
@@ -114,17 +123,18 @@ def parse_template(
                 if with_comments:
                     lines.append(line)
             else:
-                secret = False
                 if line.startswith(SECRET_MARK):
                     line = line[length:]
-                    secret = True
+                    value_type = SecretTemplateValue
+                else:
+                    value_type = PublicTemplateValue
                 parts = line.split("=", maxsplit=1)
                 if len(parts) == 1:
                     var = parts[0]
                     val = env.get(parts[0], "")
                 else:
                     var, val = parts[0], parts[1]
-                lines.append(RenderedTemplateValue(var, val, secret))
+                lines.append(value_type(var, val))
     return lines
 
 
@@ -136,35 +146,37 @@ def prepare_public_output_and_secrets(
     secrets: dict[str, str] = {}
 
     for line in lines:
-        if isinstance(line, RenderedTemplateValue):
-            var, val, secret = line.var, line.val, line.secret
-            if not empty and not val:
+        if isinstance(line, PublicTemplateValue):
+            if not empty and not line.val:
                 continue
-            if secret:
-                secrets[var] = val
+            output_lines.append(f"{line.var}={line.val}")
+        elif isinstance(line, SecretTemplateValue):
+            if not empty and not line.val:
                 continue
-            output_lines.append(f"{var}={val}")
+            secrets[line.var] = line.val
         else:
             output_lines.append(line)
 
     return output_lines, secrets
 
 
-def output_result(lines: list[str], outputfile: str) -> None:
-    def writelines(fp, name, _lines):
-        for line in _lines:
-            fp.write(f"{line}\n")
-        linecount = len(_lines)
+def output_result(public_lines: list[str], outputfile: str) -> None:
+    def writelines(fp, name, lines):
+        for public_line in lines:
+            # Secret template values are excluded before this writer is called.
+            # codeql[py/clear-text-storage-sensitive-data]
+            fp.write(f"{public_line}\n")
+        linecount = len(lines)
         print(
             f"{name}: {linecount} line{'' if linecount == 1 else 's'} written",
             file=sys.stderr,
         )
 
     if outputfile == "-":
-        writelines(sys.stdout, "<stdout>", lines)
+        writelines(sys.stdout, "<stdout>", public_lines)
     else:
         with open(outputfile, "w+") as f:
-            writelines(f, outputfile, lines)
+            writelines(f, outputfile, public_lines)
 
 
 def secrets_manager(**kwargs) -> SecretsManager:
