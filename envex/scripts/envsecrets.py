@@ -22,6 +22,7 @@ from envex.paths import current_working_dir
 
 SECRET_MARK = "|"
 _SUBSTITUTION_PATTERN = re.compile(r"\$\{|\$[a-zA-Z_][a-zA-Z0-9_]*")
+RenderedTemplateLine = str | tuple[str, str, bool]
 
 
 def _default_search_path(envfile: str | Path | None) -> list[str | Path]:
@@ -62,7 +63,7 @@ def read_env(
     )
 
 
-def subst(environ, lines) -> list:
+def subst(environ, lines) -> list[RenderedTemplateLine]:
     """Post-process template values using dotenv-style variable substitution."""
     data = []
 
@@ -82,7 +83,7 @@ def subst(environ, lines) -> list:
     return data
 
 
-def parse_template(env, template, with_comments=False):
+def parse_template(env, template, with_comments=False) -> list[RenderedTemplateLine]:
     length = len(SECRET_MARK)
     lines = []
     with open(template, "r") as f:
@@ -106,25 +107,33 @@ def parse_template(env, template, with_comments=False):
     return lines
 
 
-def output_result(lines: list, outputfile: str, empty: bool) -> dict:
-    secrets = {}
+def prepare_public_output_and_secrets(
+    lines: Sequence[RenderedTemplateLine], empty: bool
+) -> tuple[list[str], dict[str, str]]:
+    """Format public output lines and extract secret values from rendered template lines."""
+    output_lines: list[str] = []
+    secrets: dict[str, str] = {}
 
+    for line in lines:
+        if isinstance(line, tuple):
+            var, val, secret = line
+            if not empty and not val:
+                continue
+            if secret:
+                secrets[var] = val
+                continue
+            output_lines.append(f"{var}={val}")
+        else:
+            output_lines.append(line)
+
+    return output_lines, secrets
+
+
+def output_result(lines: list[str], outputfile: str) -> None:
     def writelines(fp, name, _lines):
-        linecount = 0
         for line in _lines:
-            if isinstance(line, tuple):
-                var, val, secret = line[0], line[1], line[2]
-                if val or empty:
-                    if secret:
-                        secrets[var] = val
-                        continue
-                    out = f"{var}={val}"
-                else:
-                    continue
-            else:
-                out = line
-            print(out, file=fp)
-            linecount += 1
+            print(line, file=fp)
+        linecount = len(_lines)
         print(
             f"{name}: {linecount} line{'' if linecount == 1 else 's'} written",
             file=sys.stderr,
@@ -136,13 +145,11 @@ def output_result(lines: list, outputfile: str, empty: bool) -> dict:
         with open(outputfile, "w+") as f:
             writelines(f, outputfile, lines)
 
-    return secrets
-
 
 def secrets_manager(**kwargs) -> SecretsManager:
     sm = SecretsManager(**kwargs)
     if not sm.client:
-        error("secrets manager not available")
+        error("secrets manager not available", 1)
     elif sm.sealed:
         error("secrets manager is sealed", 2)
     return sm
@@ -254,8 +261,10 @@ def run(args: argparse.Namespace) -> None:
     env = read_env(args.dotenv, search=search, parents=args.parents, useenv=args.environ)
     data = parse_template(env, args.template, args.comments)
     rendered = subst(env, data)
-    if secrets := output_result(rendered, args.output, args.empty):
+    public_lines, secrets = prepare_public_output_and_secrets(rendered, args.empty)
+    if secrets:
         create_or_update_secrets(secrets, args.key, args.cert, args.verbose)
+    output_result(public_lines, args.output)
 
 
 def main(argv: Sequence[str] | argparse.Namespace | None = None) -> None:
