@@ -13,7 +13,8 @@ Output:
 import argparse
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from envex.dot_env import load_env, substitute_env_vars
@@ -22,7 +23,22 @@ from envex.paths import current_working_dir
 
 SECRET_MARK = "|"
 _SUBSTITUTION_PATTERN = re.compile(r"\$\{|\$[a-zA-Z_][a-zA-Z0-9_]*")
-RenderedTemplateLine = str | tuple[str, str, bool]
+
+
+@dataclass(frozen=True)
+class RenderedTemplateValue:
+    var: str
+    val: str
+    secret: bool
+
+
+RenderedTemplateLine = str | RenderedTemplateValue
+
+
+class SecretsManagerError(RuntimeError):
+    def __init__(self, message: str, exitcode: int):
+        super().__init__(message)
+        self.exitcode = exitcode
 
 
 def _default_search_path(envfile: str | Path | None) -> list[str | Path]:
@@ -63,9 +79,12 @@ def read_env(
     )
 
 
-def subst(environ, lines) -> list[RenderedTemplateLine]:
+def subst(
+    environ: MutableMapping[str, str],
+    lines: Sequence[RenderedTemplateLine],
+) -> list[RenderedTemplateLine]:
     """Post-process template values using dotenv-style variable substitution."""
-    data = []
+    data: list[RenderedTemplateLine] = []
 
     def do_subst(value: str) -> str:
         if _SUBSTITUTION_PATTERN.search(value):
@@ -73,19 +92,21 @@ def subst(environ, lines) -> list[RenderedTemplateLine]:
         return value
 
     for line in lines:
-        if isinstance(line, tuple):
-            var, val, secret = line[0], do_subst(line[1]), line[2]
-            environ[var] = val  # update the environment
-            data.append((var, val, secret))
+        if isinstance(line, RenderedTemplateValue):
+            val = do_subst(line.val)
+            environ[line.var] = val  # update the environment
+            data.append(RenderedTemplateValue(line.var, val, line.secret))
         else:
             data.append(line)
 
     return data
 
 
-def parse_template(env, template, with_comments=False) -> list[RenderedTemplateLine]:
+def parse_template(
+    env: Mapping[str, str], template: str | Path, with_comments=False
+) -> list[RenderedTemplateLine]:
     length = len(SECRET_MARK)
-    lines = []
+    lines: list[RenderedTemplateLine] = []
     with open(template, "r") as f:
         for line in f:
             line = line.strip()
@@ -103,7 +124,7 @@ def parse_template(env, template, with_comments=False) -> list[RenderedTemplateL
                     val = env.get(parts[0], "")
                 else:
                     var, val = parts[0], parts[1]
-                lines.append((var, val, secret))
+                lines.append(RenderedTemplateValue(var, val, secret))
     return lines
 
 
@@ -115,8 +136,8 @@ def prepare_public_output_and_secrets(
     secrets: dict[str, str] = {}
 
     for line in lines:
-        if isinstance(line, tuple):
-            var, val, secret = line
+        if isinstance(line, RenderedTemplateValue):
+            var, val, secret = line.var, line.val, line.secret
             if not empty and not val:
                 continue
             if secret:
@@ -149,9 +170,9 @@ def output_result(lines: list[str], outputfile: str) -> None:
 def secrets_manager(**kwargs) -> SecretsManager:
     sm = SecretsManager(**kwargs)
     if not sm.client:
-        error("secrets manager not available", 1)
+        raise SecretsManagerError("secrets manager not available", 1)
     elif sm.sealed:
-        error("secrets manager is sealed", 2)
+        raise SecretsManagerError("secrets manager is sealed", 2)
     return sm
 
 
@@ -257,14 +278,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run(args: argparse.Namespace) -> None:
-    search = args.search.split(",") if args.search else None
-    env = read_env(args.dotenv, search=search, parents=args.parents, useenv=args.environ)
-    data = parse_template(env, args.template, args.comments)
-    rendered = subst(env, data)
-    public_lines, secrets = prepare_public_output_and_secrets(rendered, args.empty)
-    if secrets:
-        create_or_update_secrets(secrets, args.key, args.cert, args.verbose)
-    output_result(public_lines, args.output)
+    try:
+        search = args.search.split(",") if args.search else None
+        env = read_env(
+            args.dotenv, search=search, parents=args.parents, useenv=args.environ
+        )
+        data = parse_template(env, args.template, args.comments)
+        rendered = subst(env, data)
+        public_lines, secrets = prepare_public_output_and_secrets(rendered, args.empty)
+        if secrets:
+            create_or_update_secrets(secrets, args.key, args.cert, args.verbose)
+        output_result(public_lines, args.output)
+    except SecretsManagerError as exc:
+        error(str(exc), exc.exitcode)
 
 
 def main(argv: Sequence[str] | argparse.Namespace | None = None) -> None:

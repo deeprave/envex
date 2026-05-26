@@ -31,6 +31,23 @@ def test_main_supports_console_script_help(monkeypatch, capsys):
     assert "usage: envsecrets" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    ("manager", "message", "exitcode"),
+    [
+        (secrets_manager_factory(available=False)[0], "secrets manager not available", 1),
+        (secrets_manager_factory(sealed=True)[0], "secrets manager is sealed", 2),
+    ],
+)
+def test_secrets_manager_raises_dedicated_error(monkeypatch, manager, message, exitcode):
+    monkeypatch.setattr(envsecrets, "SecretsManager", manager)
+
+    with pytest.raises(envsecrets.SecretsManagerError) as exc_info:
+        envsecrets.secrets_manager()
+
+    assert str(exc_info.value) == message
+    assert exc_info.value.exitcode == exitcode
+
+
 def test_main_parses_argv_and_writes_env_and_secrets(tmp_path, monkeypatch):
     dotenv = tmp_path / ".env"
     dotenv.write_text("PUBLIC=hello\nSECRET=shh\n")
