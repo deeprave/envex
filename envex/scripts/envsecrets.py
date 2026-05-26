@@ -18,10 +18,20 @@ from functools import cache
 from pathlib import Path
 from string import Template
 
-from envex.dot_env import load_env
+from envex.dot_env import _current_working_dir, load_env
 from envex.env_hvac import SecretsManager
 
 SECRET_MARK = "|"
+
+
+def _default_search_path(envfile: str | Path | None) -> list[str | Path]:
+    cwd = _current_working_dir()
+    if cwd is not None:
+        return [cwd]
+    if envfile is not None and Path(envfile).is_absolute():
+        return [Path(envfile)]
+    error("current working directory is unavailable; skipping default dotenv search path")
+    return []
 
 
 # noinspection DuplicatedCode
@@ -34,7 +44,7 @@ def read_env(
 ):
     """Read the entire .env file"""
     if search is None:
-        search_path = [Path.cwd()]
+        search_path = _default_search_path(envfile)
     else:
         search_path = set()
         for path in [p.split(",") for p in search]:

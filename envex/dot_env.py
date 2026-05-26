@@ -99,7 +99,11 @@ def _env_files(
             seen.add(path)
 
     for path in search_path:
-        path = path.resolve()
+        try:
+            path = path.resolve()
+        except FileNotFoundError:
+            record_search(path)
+            continue
         if not path.is_dir():
             path = path.parent
 
@@ -339,6 +343,13 @@ def _decode_filesystem_path(path: bytes) -> str:
     return path.decode(fs_encoding, errors="surrogateescape")
 
 
+def _current_working_dir() -> str | None:
+    try:
+        return Path.cwd().resolve(strict=True).as_posix()
+    except FileNotFoundError:
+        return None
+
+
 def load_env(
     env_file: str | Path | None = None,
     search_path: str | bytes | Path | Iterable[str | bytes | Path] | None = None,
@@ -375,7 +386,9 @@ def load_env(
 
     # insert this as a useful default
     if working_dirs:
-        environ["CWD"] = Path.cwd().resolve(strict=True).as_posix()
+        cwd = _current_working_dir()
+        if cwd is not None:
+            environ["CWD"] = cwd
 
     # determine where to search
     if search_path is None:
