@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import contextlib
 import io
+import os
 
 import pytest
 
@@ -359,6 +360,21 @@ def test_is_set_uses_secret_manager_values():
     assert not env.is_set("MISSING_SECRET")
 
 
+def test_env_source_uses_canonical_variable_for_vault_precedence(monkeypatch):
+    class FakeSecretsManager:
+        def __init__(self, **_kwargs):
+            pass
+
+        def get_secret(self, key, default=None):
+            return {"SECRET": "vault"}.get(key, default)
+
+    monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
+
+    env = envex.Env(environ={"ENVEX_SOURCE": "vault", "SECRET": "env"})
+
+    assert env.get("SECRET") == "vault"
+
+
 def test_env_list(monkeypatch):
     monkeypatch.setattr(envex.dot_env, "open_env", dotenv)
     env = envex.Env(readenv=True)
@@ -459,6 +475,17 @@ def test_env_export():
     env.export()
     for k, v in values.items():
         assert os.environ[k] == str(v)
+
+
+def test_env_export_none_removes_process_env_without_keyerror(monkeypatch):
+    monkeypatch.setenv("REMOVE_ME", "value")
+    env = envex.Env({"REMOVE_ME": "value"}, environ={})
+
+    env.export(REMOVE_ME=None)
+    env.export(REMOVE_ME=None)
+
+    assert "REMOVE_ME" not in env.env
+    assert "REMOVE_ME" not in os.environ
 
 
 def test_env_contains(monkeypatch):
