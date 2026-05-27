@@ -194,7 +194,7 @@ def test_handler_logs_success_after_write(tmp_path, monkeypatch, caplog):
     assert "Added or updated" not in caplog.text
 
 
-def test_handler_submits_unseal_keys_before_authentication_check(
+def test_handler_submits_unseal_keys_before_authentication_check_and_reseals(
     tmp_path, monkeypatch, caplog
 ):
     env_file = tmp_path / ".env"
@@ -206,6 +206,7 @@ def test_handler_submits_unseal_keys_before_authentication_check(
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self.unseal_calls = []
+            self.seal_calls = 0
             instances.append(self)
 
         @staticmethod
@@ -221,6 +222,10 @@ def test_handler_submits_unseal_keys_before_authentication_check(
             events.append("unseal")
             self.unseal_calls.append((keys, root_token))
 
+        def seal(self):
+            events.append("seal")
+            self.seal_calls += 1
+
     monkeypatch.setattr(env2hvac, "SecretsManager", FakeSecretsManager)
     caplog.set_level(logging.CRITICAL)
 
@@ -235,7 +240,8 @@ def test_handler_submits_unseal_keys_before_authentication_check(
 
     assert exc_info.value.code == 1
     assert instances[0].unseal_calls == [(["key-1", "key-2"], "root-token")]
-    assert events == ["unseal", "client"]
+    assert instances[0].seal_calls == 1
+    assert events == ["unseal", "client", "seal"]
     assert "Can't connect or authenticate with Vault" in caplog.text
 
 
