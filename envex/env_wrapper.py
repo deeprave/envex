@@ -40,7 +40,7 @@ class Env:
         url: str | None = None,
         token: str | None = None,
         cert=None,
-        verify: bool | str | None = True,
+        verify: bool | str | None = None,
         base_path: str | None = None,
         engine: str | None = None,
         mount_point: str | None = None,
@@ -67,8 +67,8 @@ class Env:
         @param token: (optional) vault token, default is $VAULT_TOKEN or ~/.vault-token
         @param cert: (optional) tuple (cert, key) or str path to client cert/key files
         @param verify: (optional) bool | str | None whether to verify server cert,
-            set ca cert path, or derive verification from VAULT_SKIP_VERIFY when
-            None (default=True)
+            set ca cert path, or derive verification from VAULT_SKIP_VERIFY and
+            Vault CA environment when None (default=None)
         @param base_path: (optional) str base path for secrets (default=None)
         @param engine: (optional) str vault secrets engine (default=None)
         @param mount_point: (optional) str vault secrets mount point (default=None, determined by engine)
@@ -111,11 +111,15 @@ class Env:
         self.read_streams(*streams, **load_env_kwargs)
         self.set(kwargs)
         self.env_source = self._resolve_env_source() == "env"
-        vault_verify = (
-            verify
-            if verify is not None
-            else not self.bool("VAULT_SKIP_VERIFY", default=False)
-        )
+        # Explicit verify wins. When omitted, VAULT_SKIP_VERIFY=true becomes an
+        # explicit False; otherwise SecretsManager derives VAULT_CACERT /
+        # VAULT_CAPATH / True in that order.
+        if verify is None:
+            vault_verify = (
+                False if self.bool("VAULT_SKIP_VERIFY", default=False) else None
+            )
+        else:
+            vault_verify = verify
         self.secret_manager = SecretsManager(
             url=url,
             token=token,

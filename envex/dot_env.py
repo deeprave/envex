@@ -31,7 +31,14 @@ DEFAULT_ENCODING = "utf-8"
 _MODIFIER_PATTERN = re.compile(r":([-+])")
 _VAR_BRACES_PATTERN = re.compile(r"\${([^{}]+)}")
 _VAR_NO_BRACES_PATTERN = re.compile(r"\$([a-zA-Z_][a-zA-Z0-9_]*)")
-_DOTENV_ASSIGNMENT_PREFIX_PATTERN = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*\s*=")
+_DOTENV_ASSIGNMENT_PREFIX_PATTERN = re.compile(r"^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=")
+# Only keys that use the envex magic header plus "_" can be rescued as
+# plaintext after decryption fails. Broader KEY= matching can be produced by
+# random encrypted bytes and would hide wrong-password/corrupt-container errors.
+_MAGIC_DOTENV_KEY_PREFIXES = (
+    f"{AUTH_MAGIC_BYTES.decode('ascii')}_",
+    f"{MAGIC_BYTES.decode('ascii')}_",
+)
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 
 
@@ -565,7 +572,7 @@ def _load_stream(
             stream.seek(stream_pos)
             if encrypted_header and (
                 _is_encrypted_env_path(env_path)
-                or not _looks_like_plaintext_dotenv(stream, encoding)
+                or not _looks_like_magic_header_plaintext_dotenv(stream, encoding)
             ):
                 raise
     return _process_stream(stream, environ, overwrite, errors, encoding, env_path)
@@ -575,15 +582,36 @@ def _is_encrypted_env_path(env_path: Path | None) -> bool:
     return env_path is not None and env_path.name.endswith(ENCRYPTED_EXT)
 
 
-def _looks_like_plaintext_dotenv(stream: BytesIO, encoding: str) -> bool:
+def _first_dotenv_assignment_key(stream: BytesIO, encoding: str) -> str | None:
     stream_pos = stream.tell()
     try:
-        line = stream.readline().decode(encoding).strip()
+        while line := stream.readline():
+            line = line.decode(encoding).strip()
+            if not line or line.startswith("#"):
+                continue
+            match = _DOTENV_ASSIGNMENT_PREFIX_PATTERN.match(line)
+            return match.group(1) if match is not None else None
     except UnicodeDecodeError:
-        return False
+        return None
     finally:
         stream.seek(stream_pos)
-    return bool(_DOTENV_ASSIGNMENT_PREFIX_PATTERN.match(line))
+    return None
+
+
+def _looks_like_plaintext_dotenv(stream: BytesIO, encoding: str) -> bool:
+    return _first_dotenv_assignment_key(stream, encoding) is not None
+
+
+def _is_magic_header_dotenv_key(key: str) -> bool:
+    return key.startswith(_MAGIC_DOTENV_KEY_PREFIXES)
+
+
+def _looks_like_magic_header_plaintext_dotenv(stream: BytesIO, encoding: str) -> bool:
+    # This stricter rescue only applies when the stream begins with envex magic
+    # bytes and the first real dotenv key follows the documented collision
+    # convention, such as SECG_KEY=....
+    key = _first_dotenv_assignment_key(stream, encoding)
+    return key is not None and _is_magic_header_dotenv_key(key)
 
 
 load_dotenv = load_env

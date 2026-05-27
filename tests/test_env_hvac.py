@@ -142,6 +142,65 @@ def test_secrets_manager_initialization_uses_logical_paths(
     assert manager.path("app/prod") == SecretsManager.join(expected_base, "app/prod")
 
 
+def test_vault_capath_is_used_when_cacert_is_absent(tmp_path, monkeypatch):
+    ca_dir = tmp_path / "ca-dir"
+    ca_dir.mkdir()
+    monkeypatch.delenv("VAULT_CACERT", raising=False)
+    monkeypatch.setenv("VAULT_CAPATH", ca_dir.as_posix())
+    instances = install_fake_hvac_client(monkeypatch)
+
+    SecretsManager()
+
+    assert instances[0].kwargs["verify"] == ca_dir.as_posix()
+
+
+def test_vault_cacert_takes_precedence_over_vault_capath(tmp_path, monkeypatch):
+    ca_cert = tmp_path / "ca.pem"
+    ca_cert.write_text("certificate bundle")
+    ca_dir = tmp_path / "ca-dir"
+    ca_dir.mkdir()
+    monkeypatch.setenv("VAULT_CACERT", ca_cert.as_posix())
+    monkeypatch.setenv("VAULT_CAPATH", ca_dir.as_posix())
+    instances = install_fake_hvac_client(monkeypatch)
+
+    SecretsManager()
+
+    assert instances[0].kwargs["verify"] == ca_cert.as_posix()
+
+
+def test_vault_capath_file_is_used_as_ca_bundle(tmp_path, monkeypatch):
+    ca_file = tmp_path / "ca-file.pem"
+    ca_file.write_text("not a directory")
+    monkeypatch.delenv("VAULT_CACERT", raising=False)
+    monkeypatch.setenv("VAULT_CAPATH", ca_file.as_posix())
+    instances = install_fake_hvac_client(monkeypatch)
+
+    SecretsManager()
+
+    assert instances[0].kwargs["verify"] == ca_file.as_posix()
+
+
+def test_invalid_vault_capath_raises_value_error(tmp_path, monkeypatch):
+    missing_path = tmp_path / "missing-ca-path"
+    monkeypatch.delenv("VAULT_CACERT", raising=False)
+    monkeypatch.setenv("VAULT_CAPATH", missing_path.as_posix())
+    install_fake_hvac_client(monkeypatch)
+
+    with pytest.raises(ValueError, match=f"VAULT_CAPATH={missing_path.as_posix()!r}"):
+        SecretsManager()
+
+
+@pytest.mark.parametrize("verify", [True, False, "/explicit/ca.pem"])
+def test_explicit_verify_overrides_vault_capath(verify, tmp_path, monkeypatch):
+    monkeypatch.setenv("VAULT_CACERT", (tmp_path / "env-ca.pem").as_posix())
+    monkeypatch.setenv("VAULT_CAPATH", (tmp_path / "env-ca-dir").as_posix())
+    instances = install_fake_hvac_client(monkeypatch)
+
+    SecretsManager(verify=verify)
+
+    assert instances[0].kwargs["verify"] == verify
+
+
 def test_initialization_failure_is_instance_local(monkeypatch):
     calls = 0
 
@@ -341,3 +400,22 @@ def test_seal_unseal():
     assert manager.sealed
     manager.unseal([], None)
     assert not manager.sealed
+
+
+def test_sealed_reads_raw_client_when_authentication_fails():
+    manager = make_manager()
+    manager._client.authenticated = False
+    manager._client.seal_status["sealed"] = True
+
+    assert manager.client is None
+    assert manager.sealed is True
+
+
+def test_unseal_uses_raw_client_when_authentication_fails():
+    manager = make_manager()
+    manager._client.authenticated = False
+    manager._client.seal_status["sealed"] = True
+
+    assert manager.client is None
+    assert manager.unseal(["key-1", "key-2"], "root-token") is True
+    assert manager.sealed is False

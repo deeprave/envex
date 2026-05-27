@@ -23,6 +23,32 @@ def test_main_supports_console_script_help(monkeypatch, capsys):
     assert "usage:" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    "verify_args",
+    [
+        ["--noverify", "--cacert", "/tmp/ca.pem"],
+        ["--cacert", "/tmp/ca.pem", "--noverify"],
+    ],
+)
+def test_main_rejects_conflicting_verify_options(
+    monkeypatch, tmp_path, capsys, verify_args
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text("PUBLIC=hello\n")
+
+    def fail_handler(*_args, **_kwargs):
+        raise AssertionError("handler should not be called")
+
+    monkeypatch.setattr(env2hvac, "handler", fail_handler)
+    monkeypatch.setattr(sys, "argv", ["env2hvac", *verify_args, str(env_file)])
+
+    with pytest.raises(SystemExit) as exc_info:
+        env2hvac.main()
+
+    assert exc_info.value.code == 2
+    assert "not allowed with argument" in capsys.readouterr().err
+
+
 def install_fake_secrets_manager(
     monkeypatch, fail_write=False, forbid_read=False, existing_values=None
 ):
@@ -93,6 +119,17 @@ def test_handler_writes_env_values_to_secret_manager(tmp_path, monkeypatch):
     assert instances[0].get_calls == ["myapp/prod"]
 
 
+def test_handler_passes_omitted_verify_as_vault_default(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("PUBLIC=hello\n")
+
+    instances = install_fake_secrets_manager(monkeypatch)
+
+    env2hvac.handler([str(env_file)], namespace="myapp", environ="prod")
+
+    assert instances[0].kwargs["verify"] is None
+
+
 def test_handler_writes_when_existing_secret_read_is_forbidden(
     tmp_path, monkeypatch, caplog
 ):
@@ -155,6 +192,51 @@ def test_handler_logs_success_after_write(tmp_path, monkeypatch, caplog):
         env2hvac.handler([str(env_file)], namespace="myapp", environ="prod")
 
     assert "Added or updated" not in caplog.text
+
+
+def test_handler_submits_unseal_keys_before_authentication_check(
+    tmp_path, monkeypatch, caplog
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text("PUBLIC=hello\n")
+    events = []
+    instances = []
+
+    class FakeSecretsManager:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            self.unseal_calls = []
+            instances.append(self)
+
+        @staticmethod
+        def join(*args, sep="/"):
+            return sep.join([a.strip(sep) for a in args if a])
+
+        @property
+        def client(self):
+            events.append("client")
+            return None
+
+        def unseal(self, keys, root_token):
+            events.append("unseal")
+            self.unseal_calls.append((keys, root_token))
+
+    monkeypatch.setattr(env2hvac, "SecretsManager", FakeSecretsManager)
+    caplog.set_level(logging.CRITICAL)
+
+    with pytest.raises(SystemExit) as exc_info:
+        env2hvac.handler(
+            [str(env_file)],
+            token="root-token",
+            unseal="key-1,key-2",
+            namespace="myapp",
+            environ="prod",
+        )
+
+    assert exc_info.value.code == 1
+    assert instances[0].unseal_calls == [(["key-1", "key-2"], "root-token")]
+    assert events == ["unseal", "client"]
+    assert "Can't connect or authenticate with Vault" in caplog.text
 
 
 def test_handler_fails_when_explicit_input_file_is_missing(tmp_path, monkeypatch, caplog):

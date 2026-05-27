@@ -29,6 +29,27 @@ def expand(path: str):
     return os.path.expandvars(os.path.expanduser(path))
 
 
+def _vault_verify_from_env() -> bool | str:
+    cacert = os.getenv("VAULT_CACERT")
+    if cacert:
+        return expand(cacert)
+
+    capath = os.getenv("VAULT_CAPATH")
+    if capath:
+        capath = expand(capath)
+        # requests accepts a CA bundle file or an OpenSSL-hashed CA directory.
+        # Prefer honoring a file-valued VAULT_CAPATH over falling back to system
+        # CAs, which would silently weaken a pinned trust configuration.
+        if os.path.isfile(capath) or os.path.isdir(capath):
+            return capath
+        raise ValueError(
+            f"VAULT_CAPATH={capath!r} must point to a CA bundle file "
+            "or CA certificate directory"
+        )
+
+    return True
+
+
 def read_pem(variable: str, is_key: bool = False):
     """
     Get the path from the given environment variable if it points to a valid PEM file.
@@ -51,7 +72,7 @@ class SecretsManager:
         url: str | None = None,
         token: str | None = None,
         cert=None,
-        verify: bool | str = True,
+        verify: bool | str | None = None,
         base_path: str | None = None,
         engine: str | None = None,
         mount_point: str | None = None,
@@ -66,8 +87,10 @@ class SecretsManager:
         :param token (str): Authentication token to include in requests sent to Vault.
         :param cert tuple(cert, key): Certificates for use in requests sent to the Vault instance.
             This should be a tuple with the certificate and then key.
-        :param verify: (Bool | str) Either a boolean to indicate whether TLS verification should be performed
-            when sending requests to Vault, or a string path of the CA bundle to use for verification.
+        :param verify: (Bool | str | None) Either a boolean to indicate whether TLS verification should be
+            performed when sending requests to Vault, a string path of the CA bundle or OpenSSL-hashed CA
+            directory to use for verification, or None to derive verification from VAULT_CACERT, then a
+            VAULT_CAPATH CA directory, then True.
             See https://docs.python-requests.org/en/master/user/advanced/#ssl-cert-verification.
         :param timeout (int): The timeout value for requests sent to Vault.
         :param proxies (dict): Proxies to use when performing requests.
@@ -77,8 +100,8 @@ class SecretsManager:
         :param namespace (str): Optional Vault Namespace.
         :param kwargs (dict): Additional parameters to pass to the adapter constructor.
         """
-        if verify in (True, None):
-            verify = os.getenv("VAULT_CACERT") or True
+        if verify is None:
+            verify = _vault_verify_from_env()
         if isinstance(verify, str):
             verify = expand(verify)
         if cert is None:
@@ -259,20 +282,24 @@ class SecretsManager:
             yield from self.secrets.keys()
 
     def seal(self):
-        if self.client:
-            response = self.client.sys.seal()
+        # Seal/status/unseal operations must work before authentication succeeds:
+        # a sealed Vault can reject authenticated checks until unseal keys are submitted.
+        if self._client:
+            response = self._client.sys.seal()
             return response["sealed"]
         return None
 
     def unseal(self, keys: list, root_token: str | None):
-        if self.client:
-            response = self.client.sys.submit_unseal_keys(keys, root_token)
+        # Intentionally bypasses self.client so unseal can run while Vault is sealed.
+        if self._client:
+            response = self._client.sys.submit_unseal_keys(keys, root_token)
             return not response["sealed"]
         return None
 
     @property
     def sealed(self) -> bool | None:
-        if self.client:
-            response = self.client.seal_status
+        # Intentionally bypasses self.client so status works before authentication.
+        if self._client:
+            response = self._client.seal_status
             return response["sealed"]
         return None

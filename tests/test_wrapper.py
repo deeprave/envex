@@ -298,9 +298,9 @@ def test_env_bool_rejects_invalid_strings(value):
 @pytest.mark.parametrize(
     ("skip_verify", "expected_verify"),
     [
-        (None, True),
-        ("false", True),
-        ("0", True),
+        (None, None),
+        ("false", None),
+        ("0", None),
         ("true", False),
         ("1", False),
     ],
@@ -709,10 +709,11 @@ def test_plaintext_fallback_with_env_password_is_not_corrupted(
 
 @pytest.mark.parametrize("key", ["SECG_KEY", "SECF_KEY"])
 @pytest.mark.parametrize("source", ["env-file", "stream"])
+@pytest.mark.parametrize("prefix", ["", "# comment\n\n"])
 def test_plaintext_magic_prefix_key_with_env_password_is_not_rejected(
-    password, tmp_path, key, source
+    password, tmp_path, key, source, prefix
 ):
-    data = f"{key}=value\n"
+    data = f"{prefix}{key}=value\n"
     if source == "env-file":
         env_file = tmp_path / ".env"
         env_file.write_text(data)
@@ -729,8 +730,17 @@ def test_plaintext_magic_prefix_key_with_env_password_is_not_rejected(
     assert env[key] == "value"
 
 
-def test_encrypted_stream_wrong_password_raises_decrypt_error(password):
+def test_encrypted_stream_wrong_password_raises_decrypt_error(password, monkeypatch):
+    def token_bytes(size):
+        if size == env_crypto.SALT_LENGTH:
+            return b"=\n" + b"s" * (size - 2)
+        if size == env_crypto.GCM_NONCE_LENGTH:
+            return b"n" * size
+        return b"x" * size
+
+    monkeypatch.setattr(env_crypto.secrets, "token_bytes", token_bytes)
     stream = encrypt_data(io.BytesIO(b"ONE=1\n"), password)
+    assert stream.getvalue().startswith(b"SECG=\n")
 
     with pytest.raises(DecryptError):
         envex.Env(stream, decrypt=True, password="wrong-password")
