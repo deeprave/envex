@@ -2,9 +2,11 @@
 
 ### v5.0.0
 
-- ⚠️ BREAKING CHANGE ⚠️: encrypted files now use authenticated AES-256-GCM. Files encrypted by envex 5.0.0 or later cannot be decrypted by envex 4.x or older.
-- Legacy AES-CBC files can be migrated with `envcrypt --decrypt --legacy ...` followed by `envcrypt --encrypt ...`.
-- ⚠️ BREAKING CHANGE ⚠️: `SecretsManager.base_path` and `SecretsManager.path()` now use logical KV v2 paths. Direct `SecretsManager` users should use `mount_point` for the Vault secrets engine mount.
+- ⚠️ BREAKING CHANGE: encrypted files now use authenticated AES-256-GCM. Files encrypted by envex 5.0.0 or later cannot be decrypted by envex 4.x or older. The new format is properly HMAC protected.
+- Legacy AES-CBC files can be migrated with
+  - `envcrypt --decrypt --legacy ...`, followed by
+  - `envcrypt --encrypt ...`.
+- ⚠️ BREAKING CHANGE: `SecretsManager.base_path` and `SecretsManager.path()` now use logical KV v2 paths. Direct `SecretsManager` users should use `mount_point` for the Vault secrets engine mount.
 - Vault secret reads, writes, and deletes now use hvac's KV v2 API.
 - Vault client certificate configuration now supports either a combined PEM file or separate certificate/key files.
 - `SecretsManager.set_secrets(path, values={})` is non-destructive; use `delete_secrets(path)` to delete a secret document.
@@ -13,6 +15,12 @@
 - `Env.int()` now parses signed integer strings and raises `ValueError` for malformed non-empty values.
 - Extra `Env(...)` keyword environment values now apply after loader and Vault options.
 - Dotenv parsing now preserves empty values, handles missing files explicitly, and raises `DecryptError` for encrypted-looking streams that fail to decrypt.
+
+#### Fixes
+
+- Hardened Vault TLS defaults, seal status, and unseal behavior.
+- `seal --help` now works without optional Vault dependencies installed.
+- Improved encrypted/plaintext dotenv detection around envex magic prefixes and wrong passwords.
 
 ### v4.4.0
 
@@ -40,7 +48,7 @@
 
 ### v4.0.0
 
-- :warning: BREAKING CHANGE: additional kwargs passed to Env() are no longer added to the env if readenv=False. This is probably of no consequence as it is a (mis?)feature that was rarely (if ever) used.
+- ⚠️ BREAKING CHANGE: additional kwargs passed to Env() are no longer added to the env if readenv=False. This is probably of no consequence as it is a (mis?)feature that was rarely (if ever) used.
 - Bugfix: dicts passed in *args the Env() are now correctly converted to str->str mappings.
 - Feature: Env can now take BytesIO and StringIO objects in Env(*args). Since these are immediate objects, they are handled as priority variables, different to variables set via `.env` files in that they overwrite existing variables by default. Explicitly using the overwrite=False changes this behaviour.
 - Warning: To provide support for different types of streams, environment files are now handled internally as bytes. However, before evaluation they are converted via an encoding parameter that defaults to "utf-8".

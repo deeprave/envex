@@ -39,7 +39,7 @@ def test_seal_exits_nonzero_on_operational_error(monkeypatch, caplog):
         def seal_status(self):
             raise RuntimeError("status failed")
 
-    monkeypatch.setattr(seal.hvac, "Client", lambda **_kwargs: FakeClient())
+    monkeypatch.setattr(seal, "_create_client", lambda **_kwargs: FakeClient())
     monkeypatch.setattr(
         sys, "argv", ["seal", "--address", "http://vault.local", "--token", "token"]
     )

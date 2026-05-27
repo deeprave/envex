@@ -60,7 +60,7 @@ def handler(
     url: str | None = None,
     token: str | None = None,
     cert: tuple[str, str] | None = None,
-    verify: bool | str = True,
+    verify: bool | str | None = None,
     unseal: str | None = None,
     namespace: str | None = None,
     environ: str | None = None,
@@ -173,19 +173,20 @@ def main():
         default=None,
         help="Client cert key (if any)",
     )
-    parser.add_argument(
+    verify_group = parser.add_mutually_exclusive_group(required=False)
+    verify_group.add_argument(
         "-N",
         "--noverify",
         dest="verify",
         action="store_false",
-        default=True,
+        default=None,
         help="Disable server certificate verification",
     )
-    parser.add_argument(
+    verify_group.add_argument(
         "-C",
         "--cacert",
         dest="verify",
-        default=True,
+        default=None,
         help="Path to a custom CA certificate (do not use with -N)",
     )
     parser.add_argument(

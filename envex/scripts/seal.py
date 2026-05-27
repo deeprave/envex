@@ -7,8 +7,10 @@ Seal or [-u] unseal a vault
 import logging
 import os
 import textwrap
+from typing import TYPE_CHECKING
 
-import hvac
+if TYPE_CHECKING:
+    import hvac
 
 description = """\
 Seal or [-u] unseal a vault
@@ -18,6 +20,10 @@ Uses environment variables:
   VAULT_TOKEN  - vault token with sufficient privilege
   VAULT_UNSEAL_KEYS <value,value,vault> - keys to unseal (if unsealing)
 """
+
+
+class HvacUnavailableError(RuntimeError):
+    pass
 
 
 def expand(path: str):
@@ -31,6 +37,17 @@ def trim_indent(text):
         trimmed_lines = [line[leading_spaces:] for line in lines]
         return "\n".join(trimmed_lines)
     return text
+
+
+def _create_client(**kwargs) -> "hvac.Client":
+    try:
+        import hvac
+    except ImportError as exc:
+        raise HvacUnavailableError(
+            "hvac is required to operate the seal command; install envex with "
+            "Vault support or install hvac"
+        ) from exc
+    return hvac.Client(**kwargs)
 
 
 def main():
@@ -78,7 +95,11 @@ def main():
     args = parser.parse_args()
 
     verify = expand(args.cacert) if args.cacert else True
-    client = hvac.Client(url=args.address, token=args.token, verify=verify)
+    try:
+        client = _create_client(url=args.address, token=args.token, verify=verify)
+    except HvacUnavailableError as e:
+        logging.error(str(e))
+        raise SystemExit(1) from None
 
     try:
         if args.seal:
