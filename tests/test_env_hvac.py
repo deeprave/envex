@@ -411,6 +411,16 @@ def test_sealed_reads_raw_client_when_authentication_fails():
     assert manager.sealed is True
 
 
+def test_seal_uses_raw_client_when_authentication_fails():
+    manager = make_manager()
+    manager._client.authenticated = False
+    manager._client.seal_status["sealed"] = False
+
+    assert manager.client is None
+    assert manager.seal() is True
+    assert manager.sealed is True
+
+
 def test_unseal_uses_raw_client_when_authentication_fails():
     manager = make_manager()
     manager._client.authenticated = False

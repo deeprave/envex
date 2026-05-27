@@ -592,6 +592,8 @@ def _first_dotenv_assignment_key(stream: BytesIO, encoding: str) -> str | None:
             match = _DOTENV_ASSIGNMENT_PREFIX_PATTERN.match(line)
             return match.group(1) if match is not None else None
     except UnicodeDecodeError:
+        # Do not skip binary data looking for a later KEY= line: encrypted bytes
+        # can contain arbitrary dotenv-looking fragments after the header.
         return None
     finally:
         stream.seek(stream_pos)
