@@ -67,17 +67,19 @@ def handler(
 ):
     files = _validate_input_files(files)
     sm = SecretsManager(url=url, token=token, cert=cert, verify=verify)
-    if unseal:
-        sm.unseal(keys=unseal.split(","), root_token=token)
-
-    client = sm.client
-    if client is None:
-        fatal("Can't connect or authenticate with Vault", exc_info=False, exitcode=1)
-
-    if client.seal_status["sealed"]:
-        fatal("Vault is currently sealed", exc_info=False, exitcode=4)
-
+    unsealed = False
     try:
+        if unseal:
+            sm.unseal(keys=unseal.split(","), root_token=token)
+            unsealed = True
+
+        client = sm.client
+        if client is None:
+            fatal("Can't connect or authenticate with Vault", exc_info=False, exitcode=1)
+
+        if client.seal_status["sealed"]:
+            fatal("Vault is currently sealed", exc_info=False, exitcode=4)
+
         path = sm.join(namespace, environ)
         _load_existing_secrets(sm, path)
         for filename in files:
@@ -111,7 +113,7 @@ def handler(
                 logging.error(f"{filename}: {e.__class__.__name__}", exc_info=True)
     finally:
         # reseal the vault
-        if unseal:
+        if unsealed:
             sm.seal()
 
 

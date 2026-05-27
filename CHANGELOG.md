@@ -2,7 +2,7 @@
 
 ### v5.0.0
 
-- ⚠️ BREAKING CHANGE: encrypted files now use authenticated AES-256-GCM. Files encrypted by envex 5.0.0 or later cannot be decrypted by envex 4.x or older. The new format is properly HMAC protected.
+- ⚠️ BREAKING CHANGE: encrypted files now use authenticated AES-256-GCM. Files encrypted by envex 5.0.0 or later cannot be decrypted by envex 4.x or older. The new format validates encrypted data with a GCM authentication tag.
 - Legacy AES-CBC files can be migrated with
   - `envcrypt --decrypt --legacy ...`, followed by
   - `envcrypt --encrypt ...`.
