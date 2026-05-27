@@ -9,6 +9,8 @@ import os
 import textwrap
 from typing import TYPE_CHECKING
 
+from envex.env_hvac import _vault_verify_from_env
+
 if TYPE_CHECKING:
     import hvac
 
@@ -17,6 +19,7 @@ Seal or [-u] unseal a vault
 Uses environment variables:
   VAULT_ADDR - vault server url
   VAULT_CACERT - optional path to CA public certificate
+  VAULT_CAPATH - optional CA bundle file or certificate directory
   VAULT_TOKEN  - vault token with sufficient privilege
   VAULT_UNSEAL_KEYS <value,value,vault> - keys to unseal (if unsealing)
 """
@@ -75,7 +78,7 @@ def main():
     parser.add_argument(
         "-C",
         "--cacert",
-        default=os.getenv("VAULT_CACERT"),
+        default=None,
         help="Override path to CA cert key",
     )
     parser.add_argument(
@@ -94,7 +97,12 @@ def main():
 
     args = parser.parse_args()
 
-    verify = expand(args.cacert) if args.cacert else True
+    try:
+        verify = expand(args.cacert) if args.cacert else _vault_verify_from_env()
+    except ValueError as e:
+        logging.error(str(e))
+        raise SystemExit(1) from None
+
     try:
         client = _create_client(url=args.address, token=args.token, verify=verify)
     except HvacUnavailableError as e:

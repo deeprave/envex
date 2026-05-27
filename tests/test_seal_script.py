@@ -39,6 +39,7 @@ def test_seal_status_uses_boolean_value_and_default_verify(
             }
 
     monkeypatch.delenv("VAULT_CACERT", raising=False)
+    monkeypatch.delenv("VAULT_CAPATH", raising=False)
     monkeypatch.setattr(seal, "_create_client", lambda **kwargs: FakeClient(**kwargs))
     monkeypatch.setattr(
         sys, "argv", ["seal", "--address", "http://vault.local", "--token", "token"]
@@ -85,6 +86,50 @@ def test_seal_expands_cacert_path(monkeypatch, capsys):
 
     assert calls[-1]["verify"] == "/tmp/envex-home/ca.pem"
     assert "Vault Status: Unsealed" in capsys.readouterr().out
+
+
+def test_seal_uses_vault_capath_default(monkeypatch, tmp_path, capsys):
+    calls = []
+    ca_dir = tmp_path / "ca-dir"
+    ca_dir.mkdir()
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            calls.append(kwargs)
+            self.seal_status = {
+                "sealed": False,
+                "type": "shamir",
+                "t": 3,
+                "n": 5,
+            }
+
+    monkeypatch.delenv("VAULT_CACERT", raising=False)
+    monkeypatch.setenv("VAULT_CAPATH", ca_dir.as_posix())
+    monkeypatch.setattr(seal, "_create_client", lambda **kwargs: FakeClient(**kwargs))
+    monkeypatch.setattr(
+        sys, "argv", ["seal", "--address", "http://vault.local", "--token", "token"]
+    )
+
+    seal.main()
+
+    assert calls[-1]["verify"] == ca_dir.as_posix()
+    assert "Vault Status: Unsealed" in capsys.readouterr().out
+
+
+def test_seal_invalid_vault_capath_exits_nonzero(monkeypatch, tmp_path, caplog):
+    missing_path = tmp_path / "missing-ca-path"
+    monkeypatch.delenv("VAULT_CACERT", raising=False)
+    monkeypatch.setenv("VAULT_CAPATH", missing_path.as_posix())
+    monkeypatch.setattr(
+        sys, "argv", ["seal", "--address", "http://vault.local", "--token", "token"]
+    )
+    caplog.set_level("ERROR")
+
+    with pytest.raises(SystemExit) as exc_info:
+        seal.main()
+
+    assert exc_info.value.code == 1
+    assert f"VAULT_CAPATH={missing_path.as_posix()!r}" in caplog.text
 
 
 def test_seal_help_does_not_require_hvac(monkeypatch, capsys):
