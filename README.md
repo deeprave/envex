@@ -33,8 +33,7 @@ The provided `envcrypt` utility conveniently allows conversion between encrypted
 #### Vault support
 Alternatively, `envex` provides seamless integration with HashiCorp Vault. This reduces the need to store plaintext secrets on the filesystem and provides a more secure approach for managing secrets.
 HashiCorp Vault functionality is optional, and is activated automatically when the `hvac` module is installed into the active virtual environment, and where connection and authentication to Vault succeed.
-Values fetched from Vault are cached by default to reduce the overhead of the api call.
-If this is of concern, caching can be disabled using the`enable_cache=False` parameter to Env.
+Values fetched from Vault are retained in the `SecretsManager` instance during its lifetime to reduce repeated API reads.
 
 #### Extended variables
 `envex` provides many features not available in other dotenv handlers (python-dotenv, etc.) including recursive
@@ -97,8 +96,8 @@ Other kwargs that can be passed to `Env` when created:
   search_path may also be passed as a colon-separated list (or semicolon on Windows) of directories to search.
 * parents (bool): search (or not) parents of dirs in the search_path
 * overwrite (bool): overwrite already set values read from .env, default is to only set if not currently set
-* update (bool): push update to os.environ if true (default) otherwise changes internally only
-  note that the presence of "export" in the .env file will override this individually and the value will be exported
+* update (bool): push loaded values to os.environ if true (default), otherwise changes internally only.
+  The "export" prefix in a .env file is accepted for dotenv syntax compatibility, but it does not force publication to os.environ when `update=False`.
 * working_dirs (bool): add CWD for the current process and PWD of source .env file
 * exception: (optional) Exception class to raise on error (default is `KeyError`)
 * errors: bool whether to raise error on missing env_file (default is False)
@@ -111,11 +110,10 @@ In addition, Env supports a few HashiCorp Vault configuration parameters as well
 * url: (str, optional) vault url, default is `$VAULT_ADDR`
 * token: (str, optional) vault token, default is `$VAULT_TOKEN` or content of `~/.vault-token`
 * cert: (str or tuple, optional) path to a combined client certificate/key PEM file, or a `(cert, key)` tuple of separate PEM file paths
-* verify: (bool, optional) whether to verify server cert (default is True)
+* verify: (bool | str | None, optional) whether to verify the server certificate, a CA bundle file or CA directory path, or None to derive verification from `VAULT_SKIP_VERIFY`, `VAULT_CACERT`, and `VAULT_CAPATH` (default is None)
 * base_path: (optional) logical secrets base path, or "environment" for secrets (default is None).
-* mount_point: (optional) Vault secrets engine mount point (default is `secret/`; values may be provided with or without slashes and are normalized internally).
-* enable_cache: bool whether to cache values fetched from Vault (default is True)
   This is used to prefix the logical path to the secret, i.e. `f"{base_path}/key"`.
+* mount_point: (optional) Vault secrets engine mount point (default is `secret/`; values may be provided with or without slashes and are normalized internally).
 
 Environment values override Vault values by default. Set `ENVEX_SOURCE=vault` to let Vault values override local environment values.
 
@@ -221,7 +219,9 @@ After an encryption or decryption operation, the input file is retained by defau
 
 Specifying the output filename is optional, and if not given the utility will append `.enc` to the input filename for encryption, or remove `.enc` for decryption. The --rm option will remove the input file on success.
 
-Note that similar to use of the Vault option, the value of encrypted variables is not published (exported) to the process environment unless the "export" prefix is used in the decrypted environment file, and therefore remains hidden from external processes.
+Decrypted values are loaded with the same rules as plaintext dotenv values.
+By default, `load_env()` and `Env(readenv=True)` publish loaded values to `os.environ`; pass `update=False` or use an isolated `environ` mapping to keep loaded decrypted values out of the process environment.
+The "export" prefix in a decrypted environment file does not override `update=False`.
 However, the passphrase must be available in order for the environment to be read, and therefore the security of the encrypted file is only as strong as the security of that passphrase.
 
 Three options are available when using the `Env` class to read encrypted environment files.
