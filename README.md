@@ -33,7 +33,8 @@ The provided `envcrypt` utility conveniently allows conversion between encrypted
 #### Vault support
 Alternatively, `envex` provides seamless integration with HashiCorp Vault. This reduces the need to store plaintext secrets on the filesystem and provides a more secure approach for managing secrets.
 HashiCorp Vault functionality is optional, and is activated automatically when the `hvac` module is installed into the active virtual environment, and where connection and authentication to Vault succeed.
-Values fetched from Vault are retained in the `SecretsManager` instance during its lifetime to reduce repeated API reads.
+Values fetched from Vault are cached in the `SecretsManager` instance during its lifetime to reduce repeated API reads.
+Envex does not automatically expire this cache or invalidate it when values are changed outside the instance; create a new `SecretsManager` or call `get_secrets()` to refresh values from Vault.
 
 #### Extended variables
 `envex` provides many features not available in other dotenv handlers (python-dotenv, etc.) including recursive
@@ -110,7 +111,7 @@ In addition, Env supports a few HashiCorp Vault configuration parameters as well
 * url: (str, optional) vault url, default is `$VAULT_ADDR`
 * token: (str, optional) vault token, default is `$VAULT_TOKEN` or content of `~/.vault-token`
 * cert: (str or tuple, optional) path to a combined client certificate/key PEM file, or a `(cert, key)` tuple of separate PEM file paths
-* verify: (bool | str | None, optional) whether to verify the server certificate, a CA bundle file or CA directory path, or None to derive verification from `VAULT_SKIP_VERIFY`, `VAULT_CACERT`, and `VAULT_CAPATH` (default is None)
+* verify: (bool | str | None, optional) whether to verify the server certificate, a CA bundle file or CA directory path, or None to derive verification from environment. Non-None values take precedence over environment variables. When None, `VAULT_SKIP_VERIFY=true` disables verification; otherwise `VAULT_CACERT`, `VAULT_CAPATH`, then the default trust store are used (default is None).
 * base_path: (optional) logical secrets base path, or "environment" for secrets (default is None).
   This is used to prefix the logical path to the secret, i.e. `f"{base_path}/key"`.
 * mount_point: (optional) Vault secrets engine mount point (default is `secret/`; values may be provided with or without slashes and are normalized internally).
