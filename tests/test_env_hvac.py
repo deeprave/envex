@@ -307,6 +307,20 @@ def test_get_secrets_uses_kv_v2_read_with_mount_and_logical_path():
     ]
 
 
+def test_secret_snapshots_do_not_expose_the_internal_cache():
+    kv2 = FakeKvV2({("secret", "base/app"): {"KEY": "original"}})
+    manager = make_manager(base_path="base", kv2=kv2)
+
+    fetched = manager.get_secrets("app")
+    fetched["KEY"] = "changed"
+
+    assert manager._cached("app") == {"KEY": "original"}
+    manager._secrets = {"DEFAULT": "original"}
+    snapshot = manager.secrets
+    snapshot["DEFAULT"] = "changed"
+    assert manager._secrets == {"DEFAULT": "original"}
+
+
 def test_get_secrets_treats_missing_kv_path_as_empty():
     class MissingKvV2(FakeKvV2):
         def read_secret_version(self, path, version=None, mount_point="secret", **kwargs):
@@ -321,18 +335,25 @@ def test_get_secrets_treats_missing_kv_path_as_empty():
 
 
 def test_set_secrets_uses_kv_v2_write_with_mount_and_logical_path():
-    kv2 = FakeKvV2()
+    kv2 = FakeKvV2({("custom", "base/app"): {"EXISTING": "keep"}})
     manager = make_manager(base_path="base", mount_point="custom", kv2=kv2)
-    manager._secrets = {"EXISTING": "keep"}
 
     manager.set_secrets("app", values={"PUBLIC": "hello"})
 
     assert kv2.write_calls == [
         {
             "path": "base/app",
-            "secret": {"PUBLIC": "hello"},
+            "secret": {"EXISTING": "keep", "PUBLIC": "hello"},
             "cas": None,
             "mount_point": "custom",
+        }
+    ]
+    assert kv2.read_calls == [
+        {
+            "path": "base/app",
+            "version": None,
+            "mount_point": "custom",
+            "kwargs": {"raise_on_deleted_version": True},
         }
     ]
 

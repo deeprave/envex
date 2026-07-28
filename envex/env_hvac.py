@@ -169,9 +169,9 @@ class SecretsManager:
     ) -> "SecretsManager":
         """Create a path-scoped view that borrows an authenticated manager client."""
         if not isinstance(manager, cls):
-            raise TypeError("secrets_manager must be a SecretsManager instance")
+            raise TypeError("manager must be a SecretsManager instance")
         if manager.client is None:
-            raise ValueError("secrets_manager must have an authenticated Vault client")
+            raise ValueError("manager must have an authenticated Vault client")
 
         view = cls.__new__(cls)
         view._client = manager._client
@@ -236,7 +236,8 @@ class SecretsManager:
 
     @property
     def secrets(self) -> dict:
-        return self._secrets
+        """Return a snapshot of the default-path secrets."""
+        return dict(self._secrets)
 
     def get_secrets(self, path: str = "") -> dict:
         kv2 = self.kv2
@@ -250,14 +251,16 @@ class SecretsManager:
             except Exception as exc:
                 if not _is_invalid_path(exc):
                     raise
-                return self._replace_cached(path, {})
+                return dict(self._replace_cached(path, {}))
             if response is not None and "data" in response:
-                return self._replace_cached(path, response["data"].get("data", {}))
-        return self._cached(path)
+                return dict(self._replace_cached(path, response["data"].get("data", {})))
+        return dict(self._cached(path))
 
     def set_secrets(self, path: str = "", values: dict | None = None):
         kv2 = self.kv2
         if kv2 and values:
+            if self._cache_key(path) not in self._cache:
+                self.get_secrets(path)
             secrets = self._cached(path)
             secrets.update(values)
             if secrets:
@@ -278,10 +281,12 @@ class SecretsManager:
     def get_secret(self, key: str, default: str | None = None, error: bool = False):
         if self.client:
             # Check if the secret is already in the cache
-            if not self.secrets:
+            secrets = self._cached()
+            if not secrets:
                 self.get_secrets()
-            if key in self.secrets:
-                return self.secrets[key]
+                secrets = self._cached()
+            if key in secrets:
+                return secrets[key]
         if error and default is None:
             raise KeyError(key)
         # Placeholder or None value when hvac is not available or secret not found
@@ -290,12 +295,14 @@ class SecretsManager:
     def set_secret(self, key: str, value: str):
         kv2 = self.kv2
         if kv2 and not any((key is None, value is None)):
-            if not self.secrets:
+            secrets = self._cached()
+            if not secrets:
                 self.get_secrets()
-            self.secrets[key] = value
+                secrets = self._cached()
+            secrets[key] = value
             kv2.create_or_update_secret(
                 path=self.path(""),
-                secret=dict(self.secrets),
+                secret=dict(secrets),
                 mount_point=self.mount_point,
             )
 
@@ -304,7 +311,8 @@ class SecretsManager:
         if kv2:
             secrets = self._cached(path)
             if not secrets:
-                secrets = self.get_secrets(path)
+                self.get_secrets(path)
+                secrets = self._cached(path)
             if key in secrets:
                 del secrets[key]
                 if secrets:
@@ -323,7 +331,8 @@ class SecretsManager:
         if self.client:
             secrets = self._cached(path)
             if not secrets:
-                secrets = self.get_secrets(path)
+                self.get_secrets(path)
+                secrets = self._cached(path)
             yield from secrets.keys()
 
     def seal(self):
