@@ -32,9 +32,9 @@ The provided `envcrypt` utility conveniently allows conversion between encrypted
 
 #### Vault support
 Alternatively, `envex` provides seamless integration with HashiCorp Vault. This reduces the need to store plaintext secrets on the filesystem and provides a more secure approach for managing secrets.
-HashiCorp Vault functionality is optional, and is activated automatically when the `hvac` module is installed into the active virtual environment, and where connection and authentication to Vault succeed.
-Values fetched from Vault are cached in the `SecretsManager` instance during its lifetime to reduce repeated API reads.
-Envex does not automatically expire this cache or invalidate it when values are changed outside the instance; create a new `SecretsManager` or call `get_secrets()` to refresh values from Vault.
+HashiCorp Vault functionality is optional. With no usable Vault configuration, envex uses local values only. Partial configuration is logged and skipped; once a complete Vault configuration resolves, Vault failures are raised rather than silently falling back to local values.
+Values fetched from Vault are cached by mounted logical path in the `SecretsManager` connection context. Derived managers created from the same manager reuse entries for the same path only.
+Envex does not automatically expire this cache or invalidate it when values are changed outside the instance; call `get_secrets()` to refresh values from Vault.
 
 #### Extended variables
 `envex` provides many features not available in other dotenv handlers (python-dotenv, etc.) including recursive
@@ -115,6 +115,7 @@ In addition, Env supports a few HashiCorp Vault configuration parameters as well
 * base_path: (optional) logical secrets base path, or "environment" for secrets (default is None).
   This is used to prefix the logical path to the secret, i.e. `f"{base_path}/key"`.
 * mount_point: (optional) Vault secrets engine mount point (default is `secret/`; values may be provided with or without slashes and are normalized internally).
+* secrets_manager: (optional) an authenticated `SecretsManager` to reuse. Envex creates a path-scoped view that shares the existing Vault client but keeps its own base path and cache entry selection. It cannot be combined with connection options such as `url`, `token`, or `verify`.
 
 Environment values override Vault values by default. Set `ENVEX_SOURCE=vault` to let Vault values override local environment values.
 

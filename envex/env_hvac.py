@@ -157,7 +157,30 @@ class SecretsManager:
             self._client = None
         self._mount_point = mount_point.strip("/")
         self._base_path = self.join(base_path)
-        self._secrets = {}
+        self._cache: dict[tuple[str, str], dict] = {}
+
+    @classmethod
+    def from_manager(
+        cls,
+        manager: "SecretsManager",
+        *,
+        base_path: str | None = None,
+        mount_point: str | None = None,
+    ) -> "SecretsManager":
+        """Create a path-scoped view that borrows an authenticated manager client."""
+        if not isinstance(manager, cls):
+            raise TypeError("secrets_manager must be a SecretsManager instance")
+        if manager.client is None:
+            raise ValueError("secrets_manager must have an authenticated Vault client")
+
+        view = cls.__new__(cls)
+        view._client = manager._client
+        view.hvac_disabled = manager.hvac_disabled
+        view._engine = manager._engine
+        view._mount_point = (mount_point or manager.mount_point).strip("/")
+        view._base_path = cls.join(manager.base_path if base_path is None else base_path)
+        view._cache = manager._cache
+        return view
 
     @staticmethod
     def join(*args, sep="/"):
@@ -174,6 +197,31 @@ class SecretsManager:
     def path(self, key) -> str:
         return self.join(self.base_path, key)
 
+    def _cache_key(self, path: str = "") -> tuple[str, str]:
+        return self.mount_point, self.path(path)
+
+    def _cached(self, path: str = "") -> dict:
+        return self._cache.setdefault(self._cache_key(path), {})
+
+    def _replace_cached(self, path: str, values: dict) -> dict:
+        cached = dict(values)
+        self._cache[self._cache_key(path)] = cached
+        return cached
+
+    def _clear_cached(self, path: str = "") -> None:
+        self._cache.pop(self._cache_key(path), None)
+
+    @property
+    def _secrets(self) -> dict:
+        """Compatibility alias for the manager's default-path cache entry."""
+        return self._cached()
+
+    @_secrets.setter
+    def _secrets(self, values: dict) -> None:
+        if not hasattr(self, "_cache"):
+            self._cache = {}
+        self._replace_cached("", values)
+
     @property
     def kv2(self):
         client = self.client
@@ -182,14 +230,9 @@ class SecretsManager:
     @property
     def client(self):
         # returns hvac.Client | None
-        try:
-            client = self._client
-            if client is not None and client.is_authenticated():
-                return client
-        except Exception as exc:
-            logging.debug(
-                f"{exc.__class__.__name__} Vault client cannot authenticate {exc}"
-            )
+        client = self._client
+        if client is not None and client.is_authenticated():
+            return client
 
     @property
     def secrets(self) -> dict:
@@ -207,20 +250,20 @@ class SecretsManager:
             except Exception as exc:
                 if not _is_invalid_path(exc):
                     raise
-                self._secrets = {}
-                return self.secrets
+                return self._replace_cached(path, {})
             if response is not None and "data" in response:
-                self._secrets = response["data"].get("data", {})
-        return self.secrets
+                return self._replace_cached(path, response["data"].get("data", {}))
+        return self._cached(path)
 
     def set_secrets(self, path: str = "", values: dict | None = None):
         kv2 = self.kv2
         if kv2 and values:
-            self._secrets |= values
-            if self.secrets:
+            secrets = self._cached(path)
+            secrets.update(values)
+            if secrets:
                 kv2.create_or_update_secret(
                     path=self.path(path),
-                    secret=self.secrets,
+                    secret=dict(secrets),
                     mount_point=self.mount_point,
                 )
 
@@ -230,7 +273,7 @@ class SecretsManager:
             kv2.delete_metadata_and_all_versions(
                 path=self.path(path), mount_point=self.mount_point
             )
-        self._secrets.clear()
+        self._clear_cached(path)
 
     def get_secret(self, key: str, default: str | None = None, error: bool = False):
         if self.client:
@@ -259,27 +302,29 @@ class SecretsManager:
     def delete_secret(self, key: str, path: str = "") -> None:
         kv2 = self.kv2
         if kv2:
-            if not self.secrets:
-                self.get_secrets()
-            if self.secrets and key in self.secrets:
-                del self.secrets[key]
-                if self.secrets:
+            secrets = self._cached(path)
+            if not secrets:
+                secrets = self.get_secrets(path)
+            if key in secrets:
+                del secrets[key]
+                if secrets:
                     kv2.create_or_update_secret(
                         path=self.path(path),
-                        secret=dict(self.secrets),
+                        secret=dict(secrets),
                         mount_point=self.mount_point,
                     )
                 else:
                     kv2.delete_metadata_and_all_versions(
                         path=self.path(path), mount_point=self.mount_point
                     )
-                    self.secrets.clear()
+                    self._clear_cached(path)
 
     def list_secrets(self, path: str = "") -> Iterator[str]:
         if self.client:
-            if not self.secrets:
-                self.get_secrets()
-            yield from self.secrets.keys()
+            secrets = self._cached(path)
+            if not secrets:
+                secrets = self.get_secrets(path)
+            yield from secrets.keys()
 
     def seal(self):
         # Seal/status/unseal operations must work before authentication succeeds:
