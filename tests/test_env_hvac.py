@@ -330,7 +330,7 @@ def test_set_secrets_uses_kv_v2_write_with_mount_and_logical_path():
     assert kv2.write_calls == [
         {
             "path": "base/app",
-            "secret": {"EXISTING": "keep", "PUBLIC": "hello"},
+            "secret": {"PUBLIC": "hello"},
             "cas": None,
             "mount_point": "custom",
         }
@@ -357,7 +357,31 @@ def test_delete_secrets_uses_kv_v2_metadata_delete():
     manager.delete_secrets("app")
 
     assert kv2.delete_calls == [{"path": "base/app", "mount_point": "secret"}]
-    assert manager.secrets == {}
+    assert manager.secrets == {"PUBLIC": "hello"}
+
+
+def test_cache_entries_are_isolated_by_path_and_shared_by_manager_views():
+    kv2 = FakeKvV2(
+        {
+            ("secret", "one"): {"VALUE": "one"},
+            ("secret", "two"): {"VALUE": "two"},
+        }
+    )
+    source = make_manager(base_path="one", kv2=kv2)
+    view = SecretsManager.from_manager(source, base_path="two")
+
+    assert source.get_secrets() == {"VALUE": "one"}
+    assert view.get_secrets() == {"VALUE": "two"}
+    assert source.secrets == {"VALUE": "one"}
+    assert view.secrets == {"VALUE": "two"}
+
+
+def test_manager_view_requires_authenticated_source():
+    source = make_manager()
+    source._client.authenticated = False
+
+    with pytest.raises(ValueError, match="authenticated"):
+        SecretsManager.from_manager(source)
 
 
 def test_get_set_list_and_delete_secret():

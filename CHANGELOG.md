@@ -1,5 +1,12 @@
 # ChangeLog
 
+### v5.1.0
+
+- ⚠️ BREAKING CHANGE: Vault is now used only when a complete effective configuration resolves. Partial configuration emits a warning and is skipped; once configured, Vault authentication, network, TLS, permission, and sealed-state failures raise instead of silently falling back to local values.
+- `Env(secrets_manager=...)` now creates a path-scoped view that reuses an authenticated Vault client while retaining independent path selection.
+- Vault secret caches are now isolated by mount point and logical path, preventing cached values from one document being written to another.
+- `env2hvac` no longer creates an additional Vault-capable `Env` while parsing each local dotenv input.
+
 ### v5.0.0
 
 - ⚠️ BREAKING CHANGE: encrypted files now use authenticated AES-256-GCM. Files encrypted by envex 5.0.0 or later cannot be decrypted by envex 4.x or older. The new format validates encrypted data with a GCM authentication tag.

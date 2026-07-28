@@ -313,8 +313,9 @@ def test_vault_skip_verify_uses_strict_boolean_parsing(
     class FakeSecretsManager:
         def __init__(self, **kwargs):
             calls.append(kwargs)
+            self.client = object()
 
-    environ = {}
+    environ = {"VAULT_TOKEN": "token"}
     if skip_verify is not None:
         environ["VAULT_SKIP_VERIFY"] = skip_verify
 
@@ -331,9 +332,13 @@ def test_explicit_vault_verify_overrides_skip_verify(verify, monkeypatch):
     class FakeSecretsManager:
         def __init__(self, **kwargs):
             calls.append(kwargs)
+            self.client = object()
 
     monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
-    envex.Env(environ={"VAULT_SKIP_VERIFY": "true"}, verify=verify)
+    envex.Env(
+        environ={"VAULT_SKIP_VERIFY": "true", "VAULT_TOKEN": "token"},
+        verify=verify,
+    )
 
     assert calls[-1]["verify"] == verify
 
@@ -347,6 +352,65 @@ def test_invalid_vault_skip_verify_raises_value_error(monkeypatch):
 
     with pytest.raises(ValueError):
         envex.Env(environ={"VAULT_SKIP_VERIFY": "treu"}, verify=None)
+
+
+def test_env_skips_vault_without_configuration(monkeypatch):
+    class FakeSecretsManager:
+        def __init__(self, **_kwargs):
+            raise AssertionError("Vault should not be initialized")
+
+    monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
+
+    env = envex.Env(environ={})
+
+    assert env.secret_manager is None
+
+
+def test_env_warns_and_skips_partial_vault_configuration(monkeypatch, caplog):
+    class FakeSecretsManager:
+        def __init__(self, **_kwargs):
+            raise AssertionError("Vault should not be initialized")
+
+    monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
+
+    env = envex.Env(environ={"VAULT_ADDR": "https://vault.example"})
+
+    assert env.secret_manager is None
+    assert "configuration is incomplete" in caplog.text
+
+
+def test_env_creates_path_scoped_view_from_secrets_manager(monkeypatch):
+    class FakeSecretsManager:
+        def __init__(self, **_kwargs):
+            self.client = object()
+
+        @classmethod
+        def from_manager(cls, manager, *, base_path=None, mount_point=None):
+            return (manager, base_path, mount_point)
+
+    monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
+    source = FakeSecretsManager()
+
+    env = envex.Env(
+        environ={}, secrets_manager=source, base_path="other", mount_point="custom"
+    )
+
+    assert env.secret_manager == (source, "other", "custom")
+
+
+def test_env_rejects_connection_options_with_secrets_manager(monkeypatch):
+    class FakeSecretsManager:
+        def __init__(self, **_kwargs):
+            self.client = object()
+
+        @classmethod
+        def from_manager(cls, *_args, **_kwargs):
+            raise AssertionError("manager view should not be created")
+
+    monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
+
+    with pytest.raises(ValueError, match="secrets_manager"):
+        envex.Env(environ={}, secrets_manager=FakeSecretsManager(), url="https://vault")
 
 
 def test_is_set_uses_secret_manager_values():
@@ -368,14 +432,16 @@ def test_is_set_uses_secret_manager_values():
 def test_env_source_uses_canonical_variable_for_vault_precedence(monkeypatch):
     class FakeSecretsManager:
         def __init__(self, **_kwargs):
-            pass
+            self.client = object()
 
         def get_secret(self, key, default=None):
             return {"SECRET": "vault"}.get(key, default)
 
     monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
 
-    env = envex.Env(environ={"ENVEX_SOURCE": "vault", "SECRET": "env"})
+    env = envex.Env(
+        environ={"ENVEX_SOURCE": "vault", "SECRET": "env", "VAULT_TOKEN": "token"}
+    )
 
     assert env.get("SECRET") == "vault"
 
@@ -384,14 +450,16 @@ def test_env_source_uses_canonical_variable_for_vault_precedence(monkeypatch):
 def test_env_source_normalizes_vault_precedence(source, monkeypatch):
     class FakeSecretsManager:
         def __init__(self, **_kwargs):
-            pass
+            self.client = object()
 
         def get_secret(self, key, default=None):
             return {"SECRET": "vault"}.get(key, default)
 
     monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
 
-    env = envex.Env(environ={"ENVEX_SOURCE": source, "SECRET": "env"})
+    env = envex.Env(
+        environ={"ENVEX_SOURCE": source, "SECRET": "env", "VAULT_TOKEN": "token"}
+    )
 
     assert env.get("SECRET") == "vault"
 

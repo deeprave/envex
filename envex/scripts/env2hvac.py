@@ -90,12 +90,6 @@ def handler(
                     env_file=filename,
                     update=False,
                     errors=False,
-                    # pass these on in case we need them for completion
-                    url=url,
-                    token=token,
-                    cert=cert,
-                    verify=verify,
-                    base_path=path,
                 )
                 count = 0
                 secrets = {}

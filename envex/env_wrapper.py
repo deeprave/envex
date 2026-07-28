@@ -5,6 +5,7 @@ Type smart wrapper around os.environ
 
 import contextlib
 import inspect
+import logging
 import os
 import re
 from pathlib import Path
@@ -30,6 +31,20 @@ class Env:
     _LOAD_ENV_KWARGS = frozenset(inspect.signature(load_env).parameters)
     _SOURCE_KEY = "ENVEX_SOURCE"
     _SOURCE_VALUES = frozenset(("env", "vault"))
+    _VAULT_ENV_VARS = frozenset(
+        (
+            "VAULT_ADDR",
+            "VAULT_TOKEN",
+            "VAULT_PATH",
+            "VAULT_CACERT",
+            "VAULT_CAPATH",
+            "VAULT_CLIENT_CERT",
+            "VAULT_CLIENT_KEY",
+            "VAULT_SKIP_VERIFY",
+            "VAULT_TIMEOUT",
+            "VAULT_NAMESPACE",
+        )
+    )
 
     def __init__(
         self,
@@ -44,6 +59,7 @@ class Env:
         base_path: str | None = None,
         engine: str | None = None,
         mount_point: str | None = None,
+        secrets_manager: SecretsManager | None = None,
         **kwargs,
     ):
         """
@@ -72,6 +88,7 @@ class Env:
         @param base_path: (optional) str base path for secrets (default=None)
         @param engine: (optional) str vault secrets engine (default=None)
         @param mount_point: (optional) str vault secrets mount point (default=None, determined by engine)
+        @param secrets_manager: (optional) existing authenticated manager to reuse
         Environment values override Vault by default. Set ENVEX_SOURCE=vault
             to let Vault values override local values.
         @param working_dirs: (optional) bool whether to include PWD/CWD (default=True)
@@ -120,16 +137,88 @@ class Env:
             )
         else:
             vault_verify = verify
-        self.secret_manager = SecretsManager(
+        self.secret_manager = self._create_secret_manager(
+            secrets_manager=secrets_manager,
             url=url,
             token=token,
             cert=cert,
             verify=vault_verify,
+            connection_verify=verify,
             base_path=base_path,
             engine=engine,
             mount_point=mount_point,
             timeout=timeout,
         )
+
+    def _create_secret_manager(
+        self,
+        *,
+        secrets_manager: SecretsManager | None,
+        url: str | None,
+        token: str | None,
+        cert,
+        verify: bool | str | None,
+        connection_verify: bool | str | None,
+        base_path: str | None,
+        engine: str | None,
+        mount_point: str | None,
+        timeout: int | None,
+    ) -> SecretsManager | None:
+        if secrets_manager is not None:
+            self._reject_manager_connection_options(
+                url=url,
+                token=token,
+                cert=cert,
+                verify=connection_verify,
+                engine=engine,
+                timeout=timeout,
+            )
+            return SecretsManager.from_manager(
+                secrets_manager, base_path=base_path, mount_point=mount_point
+            )
+
+        if not self._vault_is_configured(url=url, token=token):
+            return None
+
+        manager = SecretsManager(
+            url=url,
+            token=token,
+            cert=cert,
+            verify=verify,
+            base_path=base_path,
+            engine=engine,
+            mount_point=mount_point,
+            timeout=timeout,
+        )
+        if manager.client is None:
+            raise RuntimeError("Vault is configured but cannot authenticate")
+        return manager
+
+    def _vault_is_configured(self, *, url: str | None, token: str | None) -> bool:
+        effective_token = token or self.env.get("VAULT_TOKEN")
+        if not effective_token:
+            try:
+                from hvac.utils import get_token_from_env
+            except ImportError:
+                effective_token = None
+            else:
+                effective_token = get_token_from_env()
+        signals = bool(url or token) or any(
+            self.env.get(name) is not None for name in self._VAULT_ENV_VARS
+        )
+        if effective_token:
+            return True
+        if signals:
+            logging.warning("Vault is skipped because configuration is incomplete")
+        return False
+
+    @staticmethod
+    def _reject_manager_connection_options(**options) -> None:
+        supplied = [name for name, value in options.items() if value is not None]
+        if supplied:
+            raise ValueError(
+                "secrets_manager cannot be combined with " + ", ".join(supplied)
+            )
 
     @staticmethod
     def _is_stream(value):
@@ -224,8 +313,9 @@ class Env:
         # getting from the environment is the least expensive
         value = self.env.get(var, None)
         # not set or isn't primary, check secrets manager
-        if (value is None or not self.env_source) and hasattr(self, "secret_manager"):
-            sm_value = self.secret_manager.get_secret(var, None)
+        manager = getattr(self, "secret_manager", None)
+        if (value is None or not self.env_source) and manager is not None:
+            sm_value = manager.get_secret(var, None)
             if sm_value is not None:
                 value = sm_value
         return default if value is None else value
