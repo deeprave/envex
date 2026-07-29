@@ -2,6 +2,8 @@
 
 ### v5.1.0
 
+- ⚠️ BREAKING CHANGE: Env helper methods now resolve through the `_lookup_candidates()` extension hook and no longer dispatch through arbitrary `get()` overrides. Subclasses should provide ordered concrete names through that hook; Env resolves each name with its own environment/Vault precedence.
+- Clarified that Env mutation and mapping methods affect only the local environment mapping; Vault-derived values remain read-only through Env.
 - ⚠️ BREAKING CHANGE: Vault is now used only when a complete effective configuration resolves. Partial configuration emits a warning and is skipped; once configured, Vault authentication, network, TLS, permission, and sealed-state failures raise instead of silently falling back to local values.
 - `Env(secrets_manager=...)` now creates a path-scoped view that reuses an authenticated Vault client while retaining independent path selection.
 - Vault secret caches are now isolated by mount point and logical path, preventing cached values from one document being written to another.

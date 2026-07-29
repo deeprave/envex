@@ -429,6 +429,117 @@ def test_is_set_uses_secret_manager_values():
     assert not env.is_set("MISSING_SECRET")
 
 
+def test_lookup_candidate_hook_supports_optional_instance_prefix():
+    class PrefixedEnv(envex.Env):
+        def __init__(self, *args, prefix="DJANGO_", **kwargs):
+            self.prefix = prefix
+            super().__init__(*args, **kwargs)
+
+        def _lookup_candidates(self, var):
+            if not self.prefix or var.startswith(self.prefix):
+                return (var,)
+            return var, f"{self.prefix}{var}"
+
+    env = PrefixedEnv(
+        environ={
+            "DATABASE_URL": "raw",
+            "DJANGO_DATABASE_URL": "prefixed",
+            "DJANGO_DATABASE_PORT": "5432",
+        }
+    )
+
+    assert env.get("DATABASE_URL") == "raw"
+    assert env.get("DJANGO_DATABASE_URL") == "prefixed"
+    assert env.int("DATABASE_PORT") == 5432
+    assert env.is_set("DATABASE_PORT")
+
+    assert env.pop("DATABASE_URL") == "raw"
+    assert env.get("DATABASE_URL") == "prefixed"
+    assert env.pop("DATABASE_URL") == "prefixed"
+    assert env.pop("DATABASE_URL", "missing") == "missing"
+
+
+def test_candidate_mutations_preserve_fallback_precedence():
+    class PrefixedEnv(envex.Env):
+        prefix = "DJANGO_"
+
+        def _lookup_candidates(self, var):
+            if var.startswith(self.prefix):
+                return (var,)
+            return var, f"{self.prefix}{var}"
+
+    env = PrefixedEnv(environ={"DJANGO_DATABASE_URL": "prefixed"})
+
+    assert env.setdefault("DATABASE_URL", "default") == "prefixed"
+    assert "DATABASE_URL" not in env.env
+
+    env["DATABASE_URL"] = "raw"
+    del env["DATABASE_URL"]
+    assert env.get("DATABASE_URL") == "prefixed"
+    del env["DATABASE_URL"]
+    assert not env.is_set("DATABASE_URL")
+
+
+def test_candidate_write_target_can_prefer_a_prefix():
+    class PrefixFirstEnv(envex.Env):
+        prefix = "DJANGO_"
+
+        def _lookup_candidates(self, var):
+            if var.startswith(self.prefix):
+                return (var,)
+            return f"{self.prefix}{var}", var
+
+    env = PrefixFirstEnv(environ={})
+
+    assert env("DATABASE_URL", default="default") == "default"
+    assert env.env == {"DJANGO_DATABASE_URL": "default"}
+
+
+def test_pop_does_not_return_a_lower_priority_environment_value():
+    class FakeSecretsManager:
+        def get_secret(self, key, default=None):
+            return {"DATABASE_URL": "vault"}.get(key, default)
+
+    env = envex.Env(environ={"ENVEX_SOURCE": "vault", "DATABASE_URL": "env"})
+    env.secret_manager = FakeSecretsManager()
+
+    assert env.pop("DATABASE_URL", "missing") == "missing"
+    assert env.env["DATABASE_URL"] == "env"
+
+
+def test_is_set_does_not_reenter_a_legacy_get_override():
+    class LegacyEnv(envex.Env):
+        def get(self, var, default=None):
+            return super().is_set(var)
+
+    env = LegacyEnv(environ={"SETTING": "value"})
+
+    assert env.is_set("SETTING")
+
+
+def test_vault_settings_bypass_lookup_candidates(monkeypatch):
+    calls = []
+
+    class FakeSecretsManager:
+        def __init__(self, **kwargs):
+            calls.append(kwargs)
+            self.client = object()
+
+    class PrefixedEnv(envex.Env):
+        prefix = "DJANGO_"
+
+        def _lookup_candidates(self, var):
+            return var, f"{self.prefix}{var}"
+
+    monkeypatch.setattr("envex.env_wrapper.SecretsManager", FakeSecretsManager)
+    PrefixedEnv(
+        environ={"VAULT_TOKEN": "token", "DJANGO_VAULT_SKIP_VERIFY": "true"},
+        verify=None,
+    )
+
+    assert calls[-1]["verify"] is None
+
+
 def test_env_source_uses_canonical_variable_for_vault_precedence(monkeypatch):
     class FakeSecretsManager:
         def __init__(self, **_kwargs):
