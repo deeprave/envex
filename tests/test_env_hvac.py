@@ -51,11 +51,13 @@ class FakeKvV2:
 class FakeClient:
     def __init__(self, kv2=None, mounts=None, authenticated=True):
         self.authenticated = authenticated
+        self.authentication_calls = 0
         self.seal_status = {"sealed": False}
         self.secrets = SimpleNamespace(kv=SimpleNamespace(v2=kv2 or FakeKvV2()))
         self._mounts = mounts or {"secret/": {"type": "kv"}}
 
     def is_authenticated(self):
+        self.authentication_calls += 1
         return self.authenticated
 
     @property
@@ -82,7 +84,7 @@ def make_manager(base_path="", mount_point="secret", kv2=None):
     manager._engine = None
     manager._mount_point = mount_point
     manager._base_path = SecretsManager.join(base_path)
-    manager._secrets = {}
+    manager._cache = {}
     return manager
 
 
@@ -305,6 +307,78 @@ def test_get_secrets_uses_kv_v2_read_with_mount_and_logical_path():
             "kwargs": {"raise_on_deleted_version": True},
         }
     ]
+
+
+def test_get_secret_uses_cached_document_without_reauthenticating():
+    kv2 = FakeKvV2({("secret", "base"): {"KEY": "original"}})
+    manager = make_manager(base_path="base", kv2=kv2)
+
+    assert manager.get_secret("KEY") == "original"
+    assert manager._client.authentication_calls == 1
+    assert len(kv2.read_calls) == 1
+
+    assert manager.get_secret("KEY") == "original"
+    assert manager.get_secret("MISSING", default="fallback") == "fallback"
+    assert manager._client.authentication_calls == 1
+    assert len(kv2.read_calls) == 1
+
+
+def test_get_secrets_explicitly_refreshes_the_cached_document():
+    kv2 = FakeKvV2({("secret", "base"): {"KEY": "original"}})
+    manager = make_manager(base_path="base", kv2=kv2)
+
+    assert manager.get_secret("KEY") == "original"
+    kv2.store[("secret", "base")] = {"KEY": "refreshed"}
+
+    assert manager.get_secrets() == {"KEY": "refreshed"}
+    assert manager.get_secret("KEY") == "refreshed"
+    assert manager._client.authentication_calls == 2
+    assert len(kv2.read_calls) == 2
+
+
+def test_cached_empty_document_does_not_trigger_repeat_requests():
+    kv2 = FakeKvV2()
+    manager = make_manager(kv2=kv2)
+
+    assert manager.get_secret("MISSING") is None
+    assert manager.get_secret("MISSING") is None
+    assert manager._client.authentication_calls == 1
+    assert len(kv2.read_calls) == 1
+
+
+def test_inspecting_secrets_does_not_create_a_cache_entry():
+    kv2 = FakeKvV2({("secret", "base"): {"KEY": "value"}})
+    manager = make_manager(base_path="base", kv2=kv2)
+
+    assert manager.secrets == {}
+    assert manager.get_secret("KEY") == "value"
+    assert manager._client.authentication_calls == 1
+
+
+def test_unavailable_client_does_not_create_an_empty_cache_entry():
+    kv2 = FakeKvV2({("secret", "base"): {"KEY": "value"}})
+    manager = make_manager(base_path="base", kv2=kv2)
+    manager._client.authenticated = False
+
+    assert manager.get_secret("KEY") is None
+    assert manager._cache == {}
+
+    manager._client.authenticated = True
+    assert manager.get_secret("KEY") == "value"
+
+
+def test_failed_refresh_preserves_the_last_successful_cache_entry():
+    class FailingKvV2(FakeKvV2):
+        def read_secret_version(self, *args, **kwargs):
+            raise RuntimeError("connection lost")
+
+    manager = make_manager(kv2=FailingKvV2())
+    manager._secrets = {"KEY": "cached"}
+
+    with pytest.raises(RuntimeError, match="connection lost"):
+        manager.get_secrets()
+
+    assert manager.get_secret("KEY") == "cached"
 
 
 def test_secret_snapshots_do_not_expose_the_internal_cache():
