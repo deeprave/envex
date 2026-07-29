@@ -495,6 +495,28 @@ def test_candidate_write_target_can_prefer_a_prefix():
     assert env.env == {"DJANGO_DATABASE_URL": "default"}
 
 
+def test_constructor_values_follow_candidate_write_policy():
+    class PrefixFirstEnv(envex.Env):
+        prefix = "DJANGO_"
+
+        def _lookup_candidates(self, var):
+            if var.startswith(self.prefix):
+                return (var,)
+            return f"{self.prefix}{var}", var
+
+    env = PrefixFirstEnv(
+        {"DATABASE_URL": "mapping", "ENVEX_SOURCE": "vault"},
+        environ={},
+        CACHE_URL="keyword",
+    )
+
+    assert env.env == {
+        "DJANGO_DATABASE_URL": "mapping",
+        "DJANGO_CACHE_URL": "keyword",
+        "ENVEX_SOURCE": "vault",
+    }
+
+
 def test_pop_does_not_return_a_lower_priority_environment_value():
     class FakeSecretsManager:
         def get_secret(self, key, default=None):
@@ -505,6 +527,19 @@ def test_pop_does_not_return_a_lower_priority_environment_value():
 
     assert env.pop("DATABASE_URL", "missing") == "missing"
     assert env.env["DATABASE_URL"] == "env"
+
+
+def test_pop_removes_environment_value_when_environment_is_source():
+    class FakeSecretsManager:
+        def get_secret(self, key, default=None):
+            return {"DATABASE_URL": "vault"}.get(key, default)
+
+    env = envex.Env(environ={"ENVEX_SOURCE": "env", "DATABASE_URL": "env"})
+    env.secret_manager = FakeSecretsManager()
+
+    assert env.pop("DATABASE_URL", "missing") == "env"
+    assert "DATABASE_URL" not in env.env
+    assert env.get("DATABASE_URL") == "vault"
 
 
 def test_is_set_does_not_reenter_a_legacy_get_override():

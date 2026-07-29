@@ -107,7 +107,7 @@ class Env:
         for arg in args:
             if isinstance(arg, dict):
                 for key, value in arg.items():
-                    self.__set_raw(key, value)
+                    self.__set_initial_value(key, value)
             elif isinstance(arg, (BytesIO, TextIOBase)):
                 streams.append(arg)
 
@@ -131,7 +131,7 @@ class Env:
             load_env_kwargs["environ"] = self._env
         self.read_streams(*streams, **load_env_kwargs)
         for key, value in kwargs.items():
-            self.__set_raw(key, value)
+            self.__set_initial_value(key, value)
         self.env_source = self._resolve_env_source() == "env"
         # Explicit verify wins. When omitted, VAULT_SKIP_VERIFY=true becomes an
         # explicit False; otherwise SecretsManager derives VAULT_CACERT /
@@ -349,6 +349,13 @@ class Env:
             self.env.pop(var, None)
         else:
             self.env[var] = str(value)
+
+    def __set_initial_value(self, var: str, value) -> None:
+        """Add a constructor value without translating Env control names."""
+        if var == self._SOURCE_KEY or var in self._VAULT_ENV_VARS:
+            self.__set_raw(var, value)
+        else:
+            Env.set(self, var, value)
 
     def _lookup_candidates(self, var: str):
         """Return concrete names to try, in lookup priority order."""
