@@ -34,7 +34,7 @@ The provided `envcrypt` utility conveniently allows conversion between encrypted
 Alternatively, `envex` provides seamless integration with HashiCorp Vault. This reduces the need to store plaintext secrets on the filesystem and provides a more secure approach for managing secrets.
 HashiCorp Vault functionality is optional. With no usable Vault configuration, envex uses local values only. Partial configuration is logged and skipped; once a complete Vault configuration resolves, Vault failures are raised rather than silently falling back to local values.
 Values fetched from Vault are cached by mounted logical path in the `SecretsManager` connection context. Derived managers created from the same manager reuse entries for the same path only.
-Envex does not automatically expire this cache or invalidate it when values are changed outside the instance; call `get_secrets()` to refresh values from Vault.
+Envex does not automatically expire this cache or invalidate it when values are changed outside the instance. A loaded document, including absent keys, is served without another Vault request; call `get_secrets()` to refresh it from Vault.
 
 #### Extended variables
 `envex` provides many features not available in other dotenv handlers (python-dotenv, etc.) including recursive

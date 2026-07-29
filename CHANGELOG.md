@@ -5,6 +5,7 @@
 - ⚠️ BREAKING CHANGE: Vault is now used only when a complete effective configuration resolves. Partial configuration emits a warning and is skipped; once configured, Vault authentication, network, TLS, permission, and sealed-state failures raise instead of silently falling back to local values.
 - `Env(secrets_manager=...)` now creates a path-scoped view that reuses an authenticated Vault client while retaining independent path selection.
 - Vault secret caches are now isolated by mount point and logical path, preventing cached values from one document being written to another.
+- Cached Vault secret reads no longer perform a token-authentication request; call `get_secrets()` to explicitly refresh a cached document.
 - `env2hvac` no longer creates an additional Vault-capable `Env` while parsing each local dotenv input.
 
 ### v5.0.0

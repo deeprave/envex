@@ -203,6 +203,9 @@ class SecretsManager:
     def _cached(self, path: str = "") -> dict:
         return self._cache.setdefault(self._cache_key(path), {})
 
+    def _cache_entry(self, path: str = "") -> dict | None:
+        return self._cache.get(self._cache_key(path))
+
     def _replace_cached(self, path: str, values: dict) -> dict:
         cached = dict(values)
         self._cache[self._cache_key(path)] = cached
@@ -214,7 +217,7 @@ class SecretsManager:
     @property
     def _secrets(self) -> dict:
         """Compatibility alias for the manager's default-path cache entry."""
-        return self._cached()
+        return self._cache_entry() or {}
 
     @_secrets.setter
     def _secrets(self, values: dict) -> None:
@@ -252,9 +255,9 @@ class SecretsManager:
                 if not _is_invalid_path(exc):
                     raise
                 return dict(self._replace_cached(path, {}))
-            if response is not None and "data" in response:
-                return dict(self._replace_cached(path, response["data"].get("data", {})))
-        return dict(self._cached(path))
+            values = response["data"].get("data", {}) if response else {}
+            return dict(self._replace_cached(path, values))
+        return dict(self._cache_entry(path) or {})
 
     def set_secrets(self, path: str = "", values: dict | None = None):
         kv2 = self.kv2
@@ -279,14 +282,12 @@ class SecretsManager:
         self._clear_cached(path)
 
     def get_secret(self, key: str, default: str | None = None, error: bool = False):
-        if self.client:
-            # Check if the secret is already in the cache
-            secrets = self._cached()
-            if not secrets:
-                self.get_secrets()
-                secrets = self._cached()
-            if key in secrets:
-                return secrets[key]
+        secrets = self._cache_entry()
+        if secrets is None:
+            self.get_secrets()
+            secrets = self._cache_entry()
+        if secrets is not None and key in secrets:
+            return secrets[key]
         if error and default is None:
             raise KeyError(key)
         # Placeholder or None value when hvac is not available or secret not found
