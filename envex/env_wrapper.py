@@ -18,6 +18,9 @@ from envex.env_hvac import SecretsManager
 from .dot_env import load_env, unquote, load_stream
 
 
+_MISSING = object()
+
+
 class Env:
     """
     Wrapper around os.environ with .env enhancement` and django support
@@ -103,7 +106,8 @@ class Env:
         streams = []
         for arg in args:
             if isinstance(arg, dict):
-                self.set(arg)
+                for key, value in arg.items():
+                    self.__set_raw(key, value)
             elif isinstance(arg, (BytesIO, TextIOBase)):
                 streams.append(arg)
 
@@ -126,14 +130,15 @@ class Env:
             self.read_env(**load_env_kwargs)
             load_env_kwargs["environ"] = self._env
         self.read_streams(*streams, **load_env_kwargs)
-        self.set(kwargs)
+        for key, value in kwargs.items():
+            self.__set_raw(key, value)
         self.env_source = self._resolve_env_source() == "env"
         # Explicit verify wins. When omitted, VAULT_SKIP_VERIFY=true becomes an
         # explicit False; otherwise SecretsManager derives VAULT_CACERT /
         # VAULT_CAPATH / True in that order.
         if verify is None:
             vault_verify = (
-                False if self.bool("VAULT_SKIP_VERIFY", default=False) else None
+                False if Env.is_true(self.__resolve("VAULT_SKIP_VERIFY", False)) else None
             )
         else:
             vault_verify = verify
@@ -309,77 +314,120 @@ class Env:
     def exception(self, exc: type[Exception]):
         self._exception = exc
 
-    def get(self, var: str, default=None):
-        # getting from the environment is the least expensive
-        value = self.env.get(var, None)
-        # not set or isn't primary, check secrets manager
+    def __resolved_value(self, var: str):
+        """Return the effective value and source for one concrete name."""
+        env_value = self.env.get(var, _MISSING)
+        env_value = _MISSING if env_value is None else env_value
         manager = getattr(self, "secret_manager", None)
-        if (value is None or not self.env_source) and manager is not None:
+        secret_value = _MISSING
+        if (env_value is _MISSING or not self.env_source) and manager is not None:
             sm_value = manager.get_secret(var, None)
             if sm_value is not None:
-                value = sm_value
-        return default if value is None else value
+                secret_value = sm_value
+        if secret_value is not _MISSING and not self.env_source:
+            return secret_value, "vault"
+        if env_value is not _MISSING:
+            return env_value, "environment"
+        if secret_value is not _MISSING:
+            return secret_value, "vault"
+        return _MISSING, None
+
+    def __resolve(self, var: str, default=None):
+        """Resolve one concrete variable name without subclass dispatch."""
+        value, _source = self.__resolved_value(var)
+        return default if value is _MISSING else value
+
+    def __resolved_candidate(self, var: str):
+        for candidate in self._lookup_candidates(var):
+            value, source = self.__resolved_value(candidate)
+            if value is not _MISSING:
+                return candidate, value, source
+        return None, _MISSING, None
+
+    def __set_raw(self, var: str, value) -> None:
+        if value is None:
+            self.env.pop(var, None)
+        else:
+            self.env[var] = str(value)
+
+    def _lookup_candidates(self, var: str):
+        """Return concrete names to try, in lookup priority order."""
+        return (var,)
+
+    def _write_candidate(self, var: str):
+        """Return the concrete name used for local writes."""
+        return next(iter(self._lookup_candidates(var)), var)
+
+    def get(self, var: str, default=None):
+        _candidate, value, _source = self.__resolved_candidate(var)
+        return default if value is _MISSING else value
 
     def pop(self, var, default=None):
-        val = self.get(var, default)
-        self.unset(var)
-        return val
+        candidate, value, source = self.__resolved_candidate(var)
+        if source == "environment":
+            self.env.pop(candidate, None)
+            return value
+        return default
 
     def set(self, var: str | dict, value=None):
         if isinstance(var, dict):
             for k, v in var.items():
-                self.set(k, v)
+                Env.set(self, k, v)
         elif value is None:
-            self.unset(var)
+            Env.unset(self, var)
         else:
-            self.env[var] = str(value)
+            self.__set_raw(self._write_candidate(var), value)
 
     def setdefault(self, var, value) -> str | None:
-        if var not in self.env:
-            self.set(var, value)
-        return self.env.get(var)
+        _candidate, current, _source = self.__resolved_candidate(var)
+        if current is not _MISSING:
+            return current
+        candidate = self._write_candidate(var)
+        self.__set_raw(candidate, value)
+        return self.env.get(candidate)
 
     def unset(self, var):
-        if var in self.env:
-            del self.env[var]
+        candidate, _value, source = self.__resolved_candidate(var)
+        if source == "environment":
+            self.env.pop(candidate, None)
 
     def is_set(self, var):
-        return self.get(var, None) is not None
+        return Env.get(self, var, None) is not None
 
     def is_all_set(self, *_vars):
         for v in _vars:
             # Expand list/tuple-like containers without consuming generators
             # or treating unordered mappings/sets as positional arguments.
             if isinstance(v, Sequence) and not isinstance(v, (str, bytes)):
-                if not self.is_all_set(*v):
+                if not Env.is_all_set(self, *v):
                     return False
-            elif not self.is_set(v):
+            elif not Env.is_set(self, v):
                 return False
         return True
 
     def is_any_set(self, *_vars):
         for v in _vars:
             if isinstance(v, Sequence) and not isinstance(v, (str, bytes)):
-                if self.is_any_set(*v):
+                if Env.is_any_set(self, *v):
                     return True
-            elif self.is_set(v):
+            elif Env.is_set(self, v):
                 return True
         return False
 
     def int(self, var, default: int | None = None) -> int:
-        val = self.get(var, default)
+        val = Env.get(self, var, default)
         return self._int(val)
 
     def float(self, var, default=None) -> float:
-        val = self.get(var, default)
+        val = Env.get(self, var, default)
         return self._float(val)
 
     def bool(self, var, default=None) -> bool:
-        val = self.get(var, default)
+        val = Env.get(self, var, default)
         return val if isinstance(val, bool) else self.is_true(val)
 
     def list(self, var, default=None) -> list:
-        val = self.get(var, default)
+        val = Env.get(self, var, default)
         return val if isinstance(val, (list, tuple)) else self._list(val)
 
     env_typemap = {
@@ -392,14 +440,14 @@ class Env:
 
     # noinspection PyShadowingBuiltins
     def __call__(self, var, default=None, **kwargs):
-        if default is not None and not self.is_set(var):
-            self.set(var, default)
+        if default is not None and not Env.is_set(self, var):
+            Env.setdefault(self, var, default)
         _type = kwargs.get("type", str)
         _type = _type if isinstance(_type, str) else _type.__name__
         with contextlib.suppress(KeyError):
             func = self.env_typemap[_type]
             return func(self, var, default=default)
-        return self.get(var, default)
+        return Env.get(self, var, default)
 
     def export(self, *args, **kwargs):
         for arg in args:
@@ -413,11 +461,14 @@ class Env:
         for k, v in kwargs.items():
             k = str(k)
             if v is None:
-                self.unset(k)
-                os.environ.pop(k, None)
+                candidate, _value, source = self.__resolved_candidate(k)
+                if source == "environment":
+                    self.env.pop(candidate, None)
+                    os.environ.pop(candidate, None)
             else:
-                self.set(k, v)
-                os.environ[k] = str(v)
+                candidate = self._write_candidate(k)
+                self.__set_raw(candidate, v)
+                os.environ[candidate] = str(v)
 
     @classmethod
     def is_true(cls, val):
@@ -469,18 +520,18 @@ class Env:
         )
 
     def __contains__(self, var):
-        return self.get(var, None) is not None
+        return Env.get(self, var, None) is not None
 
     def __setitem__(self, var: str, value: Any):
-        self.set(var, value)
+        Env.set(self, var, value)
 
     def __getitem__(self, var):
         if var not in self:
             raise self.exception(f"Key '{var}' not found")
-        return self.get(var)
+        return Env.get(self, var)
 
     def __delitem__(self, var):
-        self.unset(var)
+        Env.unset(self, var)
 
     def items(self):
         yield from self.env.items()
@@ -492,7 +543,7 @@ class Env:
         if not var:
             url = None
         else:
-            url = self.get(var, default=default) if var else default
+            url = Env.get(self, var, default=default) if var else default
             if not url and raise_error:
                 raise self._exception(f"Expected {var} is not set in environment")
         return "" if url is None else url

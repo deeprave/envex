@@ -118,6 +118,7 @@ In addition, Env supports a few HashiCorp Vault configuration parameters as well
 * secrets_manager: (optional) an authenticated `SecretsManager` to reuse. Envex creates a path-scoped view that shares the existing Vault client but keeps its own base path and cache entry selection. It cannot be combined with connection options such as `url`, `token`, or `verify`.
 
 Environment values override Vault values by default. Set `ENVEX_SOURCE=vault` to let Vault values override local environment values.
+Vault-derived values are read-only through `Env`: `get()` and the typed lookup helpers can return them, but `set()`, `unset()`, `pop()`, mapping operations, and defaults never create, update, or delete Vault secrets. Those operations affect only the local environment mapping; when a Vault value is the effective value, removal operations leave it intact.
 
 Some type-smart functions act as an alternative to `Env.get` and having to parse the result:
 ```python
