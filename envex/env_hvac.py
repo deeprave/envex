@@ -211,6 +211,16 @@ class SecretsManager:
         self._cache[self._cache_key(path)] = cached
         return cached
 
+    @staticmethod
+    def _response_values(response: Any) -> dict | None:
+        if not isinstance(response, dict):
+            return None
+        data = response.get("data")
+        if not isinstance(data, dict):
+            return None
+        values = data.get("data")
+        return dict(values) if isinstance(values, dict) else None
+
     def _clear_cached(self, path: str = "") -> None:
         self._cache.pop(self._cache_key(path), None)
 
@@ -255,8 +265,9 @@ class SecretsManager:
                 if not _is_invalid_path(exc):
                     raise
                 return dict(self._replace_cached(path, {}))
-            values = response["data"].get("data", {}) if response else {}
-            return dict(self._replace_cached(path, values))
+            values = self._response_values(response)
+            if values is not None:
+                return dict(self._replace_cached(path, values))
         return dict(self._cache_entry(path) or {})
 
     def set_secrets(self, path: str = "", values: dict | None = None):

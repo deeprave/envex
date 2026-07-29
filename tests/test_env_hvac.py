@@ -337,7 +337,7 @@ def test_get_secrets_explicitly_refreshes_the_cached_document():
 
 
 def test_cached_empty_document_does_not_trigger_repeat_requests():
-    kv2 = FakeKvV2()
+    kv2 = FakeKvV2({("secret", ""): {}})
     manager = make_manager(kv2=kv2)
 
     assert manager.get_secret("MISSING") is None
@@ -379,6 +379,30 @@ def test_failed_refresh_preserves_the_last_successful_cache_entry():
         manager.get_secrets()
 
     assert manager.get_secret("KEY") == "cached"
+
+
+@pytest.mark.parametrize("response", [None, {}, {"data": None}, {"data": {}}])
+def test_ambiguous_refresh_preserves_the_last_successful_cache_entry(response):
+    class AmbiguousKvV2(FakeKvV2):
+        def read_secret_version(self, *args, **kwargs):
+            return response
+
+    manager = make_manager(kv2=AmbiguousKvV2())
+    manager._secrets = {"KEY": "cached"}
+
+    assert manager.get_secrets() == {"KEY": "cached"}
+    assert manager.get_secret("KEY") == "cached"
+
+
+def test_ambiguous_initial_response_does_not_create_a_cache_entry():
+    class AmbiguousKvV2(FakeKvV2):
+        def read_secret_version(self, *args, **kwargs):
+            return {"data": None}
+
+    manager = make_manager(kv2=AmbiguousKvV2())
+
+    assert manager.get_secrets() == {}
+    assert manager._cache == {}
 
 
 def test_secret_snapshots_do_not_expose_the_internal_cache():
