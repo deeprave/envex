@@ -5,21 +5,15 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 # ENV EXtended
 
-`envex` is a dotenv `.env` aware environment variable handler with typing features and HashiCorp Vault support.
+`envex` is a dotenv `.env` aware environment variable handler with typing features, at-rest AES encryption and HashiCorp Vault support.
 
 ## Overview
 
 This module offers a convenient interface for managing application environments and configurations while adhering to the [12-factor app methodology](https://12factor.net). It avoids having any environment-specific variables and security-sensitive data within application code.
 
-An `Env` instance delivers a lot of functionality by providing a type-smart front-end to `os.environ`, providing a superset of `os.environ` functionality.
+An `Env` instance delivers a lot of functionality using a type-smart front-end to `os.environ`.
 
-## Installation
-
-```shell
-pip install envex
-```
-
-`envex` supports Python 3.12 through 3.14.
+`envex` supports Python 3.12 through 3.15.
 
 ## Features
 
@@ -40,7 +34,8 @@ Envex does not automatically expire this cache or invalidate it when values are 
 `envex` provides many features not available in other dotenv handlers (python-dotenv, etc.) including recursive
 expansion of "template" style variables, supporting don't-repeat-yourself (DRY) patterns.
 
-`envex` provides multiple ways to fetch environment variables:
+Importing `env` directly from `envex` is a shorthand way to use the environment, fetching values in a variety of ways.
+
 ```python
 from envex import env
 
@@ -75,6 +70,16 @@ Note that there is a subtle difference between
 If the variable is initially unset, the former simply returns the default value or None,
 but the second also sets the value to the default value if one was provided in the environment, unless it was already set.
 
+To provide a more nuanced version, construct a `Env` instance manually, providing the desired options.
+
+```python
+from envex import Env
+
+# Read an encrypted environment file
+env = Env(readenv=True, parents=True, decrypt=True)
+print(env("SECRET_VALUE_FROM_DOTENV"))
+```
+
 An Env instance can also read a `.env` (the default name) file and update the application environment accordingly.
 It can read this either when created with `Env(readenv=True)` or directly by using the method `read_env()`.
 If provided, the `readenv=True` parameter enable reading environment files according to the search_path
@@ -85,7 +90,7 @@ To override the default name of the environment file, use the `DOTENV` environme
 Variables in environment files will not overwrite existing environment variables by default. `overwrite=True` must be used to change this behaviour.
 
 Env can also be passed one or more BytesIO or String IO objects as positional parameters from which to read environment variables are read as though they were files.
-IO objects passed in this way differ only in that by default variables evaluated from their content overwrites existing
+IO objects passed in this way differ only in that by default variables evaluated from their content overwrite existing
 variables as though `overwrite=True` was used. To change the default behaviour, explicitly use `overwrite=False`.
 
 Other kwargs that can be passed to `Env` when created:
@@ -157,7 +162,7 @@ This is enforced by the underlying os.environ, but also true of any provided env
 
 ## Encrypted Environment Files
 
-To enhance security of environment files that exist on the filesystem `envex` supports the creation and use of authenticated AES-256-GCM encrypted files.
+To enhance the security of environment files that exist in the filesystem `envex`, supports the creation and use of authenticated AES-256-GCM encrypted files.
 Version 5.0.0 changes the encrypted file format from the legacy AES-CBC format to AES-GCM because the old format did not authenticate ciphertext and was vulnerable to padding-oracle style attacks if decryption failures were exposed.
 The new format authenticates encrypted data before returning plaintext and is not subject to that vulnerability.
 
