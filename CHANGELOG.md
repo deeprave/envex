@@ -1,5 +1,9 @@
 # ChangeLog
 
+### v5.1.3
+
+- Explicit python 3.15 support
+
 ### v5.1.2
 
 - Dependency upgrades only
