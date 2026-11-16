@@ -1,6 +1,6 @@
 [project]
 name = "envex"
-version = "5.1.2"
+version = "5.1.3"
 description = "Environment interface with (optionally encrypted) .env with hashicorp vault support"
 readme = "README.md"
 license = { file = "LICENSE.md" }
