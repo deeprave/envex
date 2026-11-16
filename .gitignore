@@ -304,3 +304,4 @@ Session.vim
 
 requirements.txt
 test.env*
+.idea/

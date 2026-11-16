@@ -1,5 +1,9 @@
 # ChangeLog
 
+### v5.1.2
+
+- Dependency upgrades only
+
 ### v5.1.0
 
 - ⚠️ BREAKING CHANGE: Env helper methods now resolve through the `_lookup_candidates()` extension hook and no longer dispatch through arbitrary `get()` overrides. Subclasses should provide ordered concrete names through that hook; Env resolves each name with its own environment/Vault precedence.
